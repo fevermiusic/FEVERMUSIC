@@ -1,0 +1,79 @@
+CÓMO APLICAR LAS REGLAS DE SEGURIDAD (firebase-database.rules.json)
+====================================================================
+
+1. Entra a Firebase Console → tu proyecto → Realtime Database → pestaña "Rules".
+2. Reemplaza todo el contenido por el de firebase-database.rules.json (este archivo).
+3. Dale a "Publicar".
+
+Estas son tus reglas tal cual las diste, con UN agregado necesario:
+el bloque "users" (ver más abajo por qué).
+
+NO HACE FALTA NINGÚN PASO DE ARRANQUE A MANO
+--------------------------------------------
+A diferencia de una versión anterior de esto, esta vez NO necesitas
+crear nada a mano en la consola. La cuenta de admin sigue siendo la
+de correo fijo (fevermiusiclog@gmail.com, tal como en tus
+reglas) — la primera vez que esa cuenta inicia sesión en la app,
+ella misma se crea su propio registro en /users automáticamente.
+Solo entra con esa cuenta una vez y listo.
+
+QUÉ LE AGREGUÉ A TUS REGLAS, Y POR QUÉ (para copiar aparte)
+------------------------------------------------------------
+Tus reglas no traían ningún bloque para "/users". Como la raíz
+empieza en ".read": false, ".write": false, eso significa que sin
+este bloque NADIE puede leer ni escribir ahí — ni siquiera el admin.
+Eso rompe por completo el login (cada persona necesita leer su
+propio perfil para saber su rol) y la pantalla "Registros" (crear o
+activar/desactivar vendedores). Si ya pegaste tus reglas sin esto,
+agrégale este bloque dentro de "rules", al mismo nivel que
+"products", "clients", etc.:
+
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.token.email == 'fevermiusiclog@gmail.com'"
+      }
+    },
+
+Cualquiera con sesión puede LEER /users (así cada quien puede
+confirmar su propio rol al entrar). Solo el admin puede ESCRIBIR ahí
+— crear cuentas nuevas, cambiarles el rol, o activarlas/desactivarlas.
+
+OPCIONAL — cerrar el "desactivar" de verdad en el servidor
+------------------------------------------------------------
+Con las reglas tal como están (las tuyas + el bloque de arriba),
+apagar a un vendedor desde "Registros" evita que esa persona pueda
+VOLVER A INICIAR SESIÓN, pero si ya tenía la app abierta en su
+celular en ese momento, esa sesión técnicamente podría seguir
+escribiendo pedidos — porque "products", "clients" y "orders" en tus
+reglas solo piden "auth != null", sin revisar si esa cuenta sigue
+activa.
+
+Si quieres que apagar a alguien lo bloquee de inmediato pase lo que
+pase (recomendado, y así se venía haciendo en la versión anterior),
+agrega esta condición dentro de cada ".write" de "products",
+"clients" y "orders" (con "&&"):
+
+    root.child('users').child(auth.uid).child('activo').val() !== false
+
+Por ejemplo, la de "orders" quedaría:
+
+    ".write": "auth != null && root.child('users').child(auth.uid).child('activo').val() !== false"
+
+Esto es opcional — la app funciona igual sin esto, pero sin él el
+botón de "Desactivar" en Registros es más una traba para volver a
+entrar que un bloqueo inmediato.
+
+QUÉ CAMBIÓ EN EL RESTO, EN SIMPLE
+----------------------------------
+- PRODUCTOS: solo el admin crea/edita/elimina. La CANTIDAD de stock
+  (el número, no el nombre/precio) la puede tocar cualquier cuenta
+  con sesión — así funciona vender.
+- CLIENTES: cualquiera puede registrar uno nuevo; editar o eliminar
+  uno que ya existe es solo del admin.
+- PEDIDOS: cualquiera con sesión puede crear o editar una nota;
+  eliminarla es solo del admin. Además, tus reglas ahora exigen que
+  cada pedido tenga los campos numero/ruc/cliente/items/subtotal/
+  total/timestamp con los tipos correctos — ya confirmé que así es
+  exactamente como la app arma cada pedido, así que esto no debería
+  bloquear nada en el uso normal.
