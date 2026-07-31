@@ -1,0 +1,180 @@
+<!-- ── Main: Notas de Pedido ── -->
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-title">
+      <h1>Notas de Pedido</h1>
+      <p>Gestión de órdenes de clientes</p>
+    </div>
+    <div class="topbar-actions">
+      <div class="search-wrap">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="RUC o razón social…" oninput="filterTable()">
+      </div>
+      <button class="btn btn-ghost btn-select" id="btnSelectMode" onclick="toggleClienteSelectionMode()" title="Seleccionar varios">
+        <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span id="selectModeLabel">Seleccionar</span>
+      </button>
+      <button class="btn-import" onclick="openImportClientes()">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Importar
+      </button>
+      <button class="btn btn-ghost" id="btnExportClientes" onclick="exportClientes()">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span id="exportClientesLabel">Exportar todo</span>
+      </button>
+      <button class="btn btn-ghost btn-new-item" onclick="openNewClient()">
+        <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        Nuevo cliente
+      </button>
+    </div>
+  </div>
+
+  <div class="page-content">
+    <!-- Barra de acciones masivas -->
+    <div class="bulk-bar" id="bulkBarClientes">
+      <span class="bulk-count" id="bulkCountClientes">0 seleccionados</span>
+      <button class="btn-bulk-delete" onclick="deleteSelectedClientes()">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        Eliminar seleccionados
+      </button>
+      <button class="btn-bulk-select-all" onclick="selectAllClientes()">Seleccionar todo</button>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-footer table-footer-top">
+        <span class="table-footer-text" id="footerInfo">Cargando…</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th class="col-check"><input type="checkbox" class="row-checkbox" id="checkAllClientes" onchange="toggleAllClientes(this)"></th>
+            <th class="col-ruc">RUC</th>
+            <th>Cliente</th>
+            <th class="col-city">Ciudad</th>
+            <th class="col-acts">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+        </tbody>
+      </table>
+      <div class="empty-state" id="emptyState">
+        <svg class="empty-state-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <p>Sin resultados para esa búsqueda.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ── Modal: Editar cliente ─── -->
+<div class="modal-overlay" id="editModal" onclick="outsideCloseCliente(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2 id="editModalTitle">Editar cliente</h2>
+        <p style="font-size:12px;color:var(--text-3);margin-top:2px" id="editModalSubtitle">Modificar datos del cliente en la nota</p>
+      </div>
+      <button class="modal-close" onclick="closeEdit()">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-detail-row" id="editCurrentInfo">
+        <div class="modal-detail-item">
+          <div class="modal-detail-label">RUC actual</div>
+          <div class="modal-detail-value" id="editCurrentRuc">—</div>
+        </div>
+        <div class="modal-detail-item">
+          <div class="modal-detail-label">Ciudad</div>
+          <div class="modal-detail-value" id="editCurrentCity">—</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">RUC</label>
+        <input class="form-input text-mono" id="editRuc" type="text" maxlength="11" placeholder="20xxxxxxxxx">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Razón social</label>
+        <input class="form-input" id="editNombre" type="text">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ciudad <span style="color:var(--text-3);font-weight:400;text-transform:none">(opcional)</span></label>
+        <input class="form-input" id="editCiudad" type="text">
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-ghost" id="btnDeleteClient" style="color:var(--red);border-color:#FECACA" onclick="deleteCurrentClient()">Eliminar cliente</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="closeEdit()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveEdit()">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Importar clientes ── -->
+<div class="modal-overlay" id="importClientesModal" onclick="if(event.target===this)closeImportClientes()">
+  <div class="modal import-modal">
+    <div class="modal-header">
+      <h2>Importar clientes</h2>
+      <button class="modal-close" onclick="closeImportClientes()">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Paso 1: Subir archivo -->
+      <div id="stepUpload">
+        <div class="import-template-bar">
+          <span>¿Primera vez? Descarga la plantilla oficial con el formato correcto.</span>
+          <button class="btn-template" onclick="downloadClientTemplate()">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Descargar plantilla
+          </button>
+        </div>
+        <label class="import-drop-area" for="importClientesFile">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p>Arrastra tu archivo aquí o <strong>haz clic para seleccionar</strong></p>
+          <p style="margin-top:6px;font-size:11.5px">Excel (.xlsx) o CSV</p>
+        </label>
+        <input type="file" id="importClientesFile" class="import-file-input"
+          accept=".xlsx,.xls,.csv" onchange="onImportClientesFile(this)">
+        <div id="importClientesError" style="display:none;margin-top:12px;padding:10px 14px;background:var(--red-bg);border:1px solid #FECACA;border-radius:var(--r-sm);font-size:12.5px;color:var(--red)"></div>
+      </div>
+
+      <!-- Paso 2: Vista previa -->
+      <div id="stepPreview" style="display:none">
+        <p class="import-summary" id="previewClientesSummary"></p>
+        <div class="import-preview-wrap">
+          <div id="previewClientesBody"></div>
+        </div>
+      </div>
+
+      <!-- Paso 3: Duplicados -->
+      <div id="stepDuplicates" style="display:none">
+        <p class="import-summary" id="dupClientesSummary"></p>
+        <div class="import-preview-wrap">
+          <div id="dupClientesListBody"></div>
+        </div>
+        <div class="dup-bulk-actions">
+          <button class="btn-dup-cancel" onclick="resolveDuplicate('cancelar')">Cancelar importación</button>
+          <button class="btn-dup-omit-all" onclick="resolveDuplicate('omitir')">Omitir duplicados e importar el resto</button>
+        </div>
+      </div>
+
+      <!-- Paso 4: Listo -->
+      <div id="stepDone" style="display:none">
+        <div class="import-done">
+          <div class="import-done-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <p id="importDoneMsg"></p>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeImportClientes()">Cerrar</button>
+      <button class="btn btn-primary" id="btnProcesarImport"
+        onclick="processImportClientes()"
+        style="display:none">Procesar importación</button>
+    </div>
+  </div>
+</div>

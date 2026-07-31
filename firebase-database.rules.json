@@ -1,0 +1,58 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.token.email == 'fevermiusiclog@gmail.com'"
+      }
+    },
+    "products": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email == 'fevermiusiclog@gmail.com'",
+      "$code": {
+        "name":     { ".validate": "newData.isString() && newData.val().length > 0" },
+        "price":    { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "category": { ".validate": "newData.isString()" },
+        "stock": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('activo').val() !== false",
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        }
+      }
+    },
+    "clients": {
+      ".read": "auth != null",
+      "$ruc": {
+        ".write": "auth != null && (auth.token.email == 'fevermiusiclog@gmail.com' || !data.exists()) && root.child('users').child(auth.uid).child('activo').val() !== false",
+        "nombre": { ".validate": "newData.isString() && newData.val().length > 0" },
+        "ciudad": { ".validate": "newData.isString()" }
+      }
+    },
+    "orders": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('activo').val() !== false",
+      ".indexOn": ["timestamp", "numero"],
+      "$orderId": {
+        ".validate": "newData.hasChildren(['numero','ruc','cliente','items','subtotal','total','timestamp'])",
+        "numero":       { ".validate": "newData.isString()" },
+        "ruc":          { ".validate": "newData.isString()" },
+        "cliente":      { ".validate": "newData.isString()" },
+        "subtotal":     { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "total":        { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "descuentoPct": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+        "timestamp":    { ".validate": "newData.isNumber()" },
+        "items": {
+          "$idx": {
+            "qty":   { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "price": { ".validate": "newData.isNumber() && newData.val() >= 0" }
+          }
+        }
+      }
+    },
+    "meta": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email == 'fevermiusiclog@gmail.com'"
+    }
+  }
+}

@@ -1,0 +1,259 @@
+<!-- ── Main: Stock ── -->
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-title">
+      <h1>Inventario / Stock</h1>
+      <p>Control de productos disponibles</p>
+    </div>
+    <div class="topbar-actions">
+      <div class="search-wrap">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Buscar producto o código…" oninput="filterStock()">
+      </div>
+      <button class="btn btn-ghost btn-select" id="btnSelectMode" onclick="toggleSelectionMode()" title="Seleccionar varios">
+        <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span id="selectModeLabel">Seleccionar</span>
+      </button>
+      <div class="import-menu-wrap" id="importMenuWrap">
+        <button class="btn-import" id="btnImportMenu" onclick="toggleImportMenu(event)">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Importar
+        </button>
+        <div class="import-menu" id="importMenuDropdown">
+          <button class="import-menu-item" onclick="selectImportMode('full')">
+            <strong>Importar todo</strong>
+            <span>Código, nombre, descripción, cantidad y precio — crea nuevos y actualiza existentes</span>
+          </button>
+          <button class="import-menu-item" onclick="selectImportMode('both')">
+            <strong>Cantidad y precio</strong>
+            <span>Suma la cantidad y reemplaza el precio en productos que ya existen</span>
+          </button>
+          <button class="import-menu-item" onclick="selectImportMode('stock')">
+            <strong>Solo cantidad</strong>
+            <span>Suma la cantidad al stock de productos que ya existen</span>
+          </button>
+          <button class="import-menu-item" onclick="selectImportMode('price')">
+            <strong>Solo precio</strong>
+            <span>Reemplaza el precio de productos que ya existen</span>
+          </button>
+        </div>
+      </div>
+      <button class="btn btn-ghost" id="btnExportStock" onclick="exportStock()">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span id="exportStockLabel">Exportar todo</span>
+      </button>
+      <button class="btn btn-primary btn-new-item" onclick="openModal('addModal')">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Agregar producto
+      </button>
+    </div>
+  </div>
+
+  <div class="page-content">
+
+    <!-- Stats -->
+    <div class="stock-stats" id="stockStatsRow">
+      <div class="stat-card">
+        <div class="stat-label">Total productos</div>
+        <div class="stat-value" id="statTotal">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Stock bajo</div>
+        <div class="stat-value" style="color:var(--red)" id="statLow">—</div>
+      </div>
+      <div class="stat-card" id="cardValorInventario">
+        <div class="stat-label">Valor inventario</div>
+        <div class="stat-value" id="statValue">—</div>
+      </div>
+    </div>
+
+    <!-- Barra de acciones masivas -->
+    <div class="bulk-bar" id="bulkBarStock">
+      <span class="bulk-count" id="bulkCountStock">0 seleccionados</span>
+      <button class="btn-bulk-delete" onclick="deleteSelectedStock()">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        Eliminar seleccionados
+      </button>
+      <button class="btn-bulk-select-all" onclick="selectAllStock()">Seleccionar todo</button>
+    </div>
+
+    <!-- Lista de productos (cards, vista mobile) -->
+    <div class="product-list" id="productList"></div>
+
+    <!-- Tabla de productos (vista desktop) -->
+    <div class="product-table-wrap">
+      <table class="product-table">
+        <thead>
+          <tr>
+            <th class="col-check"><input type="checkbox" class="row-checkbox" id="checkAllStock" onchange="toggleAllStock(this)"></th>
+            <th>Código</th>
+            <th>Nombre</th>
+            <th>Descripción</th>
+            <th>Stock</th>
+            <th>Precio venta</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="productTableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="empty-state" id="emptyState" style="display:none">
+      <svg class="empty-state-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <p>Sin productos que coincidan.</p>
+    </div>
+    <div class="table-footer">
+      <span class="table-footer-text" id="footerInfo">Cargando…</span>
+    </div>
+
+  </div>
+</main>
+
+<!-- ── Modal: Editar ── -->
+<div class="modal-overlay" id="editModal" onclick="outsideClose(event,'editModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2 id="editModalTitle">Editar producto</h2>
+        <p id="editModalCode" style="font-family:var(--font-mono);font-size:12px;color:var(--text-3);margin-top:3px"></p>
+      </div>
+      <button class="modal-close" onclick="closeModal('editModal')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Código</label>
+        <input class="form-input text-mono" id="editCode" type="text"
+          oninput="this.value=this.value.toUpperCase()" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nombre del producto</label>
+        <input class="form-input" id="editName" type="text">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Cantidad</label>
+          <input class="form-input text-mono" id="editStock" type="number" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Precio (S/)</label>
+          <input class="form-input text-mono" id="editPrice" type="number" min="0" step="0.01">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-ghost" id="btnDeleteProduct" style="color:var(--red);border-color:#FECACA" onclick="deleteCurrentProduct()">Eliminar producto</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="closeModal('editModal')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveStock()">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Agregar ── -->
+<div class="modal-overlay" id="addModal" onclick="outsideClose(event,'addModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2>Nuevo producto</h2>
+        <p style="font-size:12px;color:var(--text-3);margin-top:2px">Registrar en inventario</p>
+      </div>
+      <button class="modal-close" onclick="closeModal('addModal')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Código</label>
+        <input class="form-input text-mono" id="addCode" type="text" placeholder="GTR-006"
+          oninput="this.value=this.value.toUpperCase()" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nombre del producto</label>
+        <input class="form-input" id="addName" type="text" placeholder="Ej: Guitarra Yamaha C40">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Cantidad</label>
+          <input class="form-input text-mono" id="addStock" type="number" min="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Precio (S/)</label>
+          <input class="form-input text-mono" id="addPrice" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('addModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="addProduct()">Registrar producto</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Importar stock ── -->
+<div class="modal-overlay" id="importStockModal" onclick="if(event.target===this)closeImportStock()">
+  <div class="modal import-modal">
+    <div class="modal-header">
+      <div>
+        <h2 id="importStockModalTitle">Importar productos</h2>
+        <p id="importStockModalHint" style="font-size:12px;color:var(--text-3);margin-top:3px"></p>
+      </div>
+      <button class="modal-close" onclick="closeImportStock()">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Paso 1 -->
+      <div id="stepUploadStock">
+        <div class="import-template-bar">
+          <span>¿Primera vez? Descarga la plantilla con el formato correcto para esta opción.</span>
+          <button class="btn-template" onclick="downloadStockTemplate()">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Descargar plantilla
+          </button>
+        </div>
+        <label class="import-drop-area" for="importStockFile">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p>Arrastra tu archivo aquí o <strong>haz clic para seleccionar</strong></p>
+          <p style="margin-top:6px;font-size:11.5px" id="importStockDropHint">Excel (.xlsx) o CSV</p>
+        </label>
+        <input type="file" id="importStockFile" class="import-file-input"
+          accept=".xlsx,.xls,.csv" onchange="onImportStockFile(this)">
+        <div id="importStockError" style="display:none;margin-top:12px;padding:10px 14px;background:var(--red-bg);border:1px solid #FECACA;border-radius:var(--r-sm);font-size:12.5px;color:var(--red)"></div>
+      </div>
+
+      <!-- Paso 2: Preview -->
+      <div id="stepPreviewStock" style="display:none">
+        <p class="import-summary" id="previewStockSummary"></p>
+        <p id="previewStockSanitizedWarning" style="display:none;margin:0 0 10px;padding:8px 12px;background:var(--yellow-bg,#FEF3C7);border:1px solid #FDE68A;border-radius:var(--r-sm);font-size:12px;color:#92400E"></p>
+        <div class="import-preview-wrap">
+          <div id="previewStockBody"></div>
+        </div>
+      </div>
+
+      <!-- Paso 3: Conflictos de código (solo si hay) -->
+      <div id="stepConflictStock" style="display:none">
+        <p class="import-summary" id="conflictStockSummary"></p>
+        <p id="conflictStockExplain" style="display:none;margin:0 0 12px;padding:10px 14px;background:#FEE2E2;border:1px solid #FECACA;border-radius:var(--r-sm);font-size:12.5px;color:#7F1D1D;line-height:1.5"></p>
+        <div id="conflictStockBody"></div>
+      </div>
+
+      <!-- Paso 4: Listo -->
+      <div id="stepDoneStock" style="display:none">
+        <div class="import-done">
+          <div class="import-done-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <p id="importStockDoneMsg"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btnCerrarImportStock" onclick="closeImportStock()">Cerrar</button>
+      <button class="btn btn-primary" id="btnSiguienteImportStock" onclick="goToConflictStep()" style="display:none">Siguiente</button>
+      <button class="btn btn-primary" id="btnProcesarImportStock" onclick="processImportStock()" style="display:none">Procesar importación</button>
+    </div>
+  </div>
+</div>

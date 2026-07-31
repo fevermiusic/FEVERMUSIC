@@ -1,0 +1,76 @@
+<!-- ── Main: Registros (solo admin) ── -->
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-title">
+      <h1>Registros</h1>
+      <p>Cuentas del equipo — quién tiene acceso y con qué rol</p>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost btn-new-item" onclick="openNewVendor()">
+        <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        Nuevo vendedor
+      </button>
+    </div>
+  </div>
+
+  <div class="page-content">
+    <div class="table-wrap">
+      <div class="table-footer table-footer-top">
+        <span class="table-footer-text" id="regFooterInfo">Cargando…</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Usuario</th>
+            <th class="col-city">Rol</th>
+            <th class="col-city">Estado</th>
+            <th class="col-acts"></th>
+          </tr>
+        </thead>
+        <tbody id="regTableBody"></tbody>
+      </table>
+      <div class="empty-state" id="regEmptyState" style="display:none">
+        <p>Todavía no hay vendedores registrados.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Modal: nuevo vendedor -->
+<div class="modal-overlay" id="newVendorOverlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div>
+        <h2>Nuevo vendedor</h2>
+        <p>Crea una cuenta individual — no se toca la sesión actual</p>
+      </div>
+      <button class="modal-close" onclick="closeNewVendor()">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nombre</label>
+        <input type="text" id="newVendorNombre" class="form-input" placeholder="Ej. Ana Torres" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Usuario (para iniciar sesión)</label>
+        <input type="text" id="newVendorUsuario" class="form-input" placeholder="Ej. ana" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Correo <span style="font-weight:400;color:var(--text-3)">(opcional, solo de contacto)</span></label>
+        <input type="email" id="newVendorEmail" class="form-input" placeholder="ana@fever.com" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña temporal</label>
+        <input type="text" id="newVendorPassword" class="form-input" placeholder="Mínimo 6 caracteres" autocomplete="off">
+      </div>
+      <p id="newVendorError" class="dcm-subtitle" style="color:var(--red);display:none"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeNewVendor()">Cancelar</button>
+      <button class="btn btn-primary" id="newVendorSubmit" onclick="submitNewVendor()">Crear cuenta</button>
+    </div>
+  </div>
+</div>

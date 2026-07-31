@@ -1,0 +1,137 @@
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-title">
+      <h1>Nueva Nota de Pedido</h1>
+      
+    </div>
+    <div class="topbar-actions">
+      <span class="nota-number" id="notaNumber">NP-2025-008</span>
+      <button type="button" class="btn btn-ghost" onclick="goBackFromNota()">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        Volver
+      </button>
+    </div>
+  </div>
+
+  <div class="page-content">
+    <div class="nota-layout">
+
+      <!-- ── Left column ── -->
+      <div>
+        <!-- Client info -->
+        <div class="client-card">
+          <div class="client-card-icon">
+            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </div>
+          <div class="client-card-info">
+            <div class="client-card-name" id="displayNombre">—</div>
+            <div class="client-card-ruc">RUC: <span id="displayRuc">—</span></div>
+          </div>
+        </div>
+
+        <!-- Add product bar -->
+        <div class="add-product-bar">
+          <h3>Agregar artículo</h3>
+          <div class="add-product-grid">
+            <div style="position:relative">
+              <div class="add-input-label">Producto</div>
+              <input class="form-input" type="text" id="productSearch" placeholder="Buscar por nombre o código…"
+                autocomplete="off"
+                oninput="onProductSearchInput()"
+                onfocus="onProductSearchInput()"
+                onblur="onProductSearchBlur()">
+              <input type="hidden" id="selectedProductCode" value="">
+              <div id="productSuggestions" class="product-suggestions" style="display:none"></div>
+              <div class="stock-hint" id="stockHint" style="display:none">
+                <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                <span id="stockHintText"></span>
+              </div>
+            </div>
+            <div>
+              <div class="add-input-label">Cantidad</div>
+              <input class="form-input text-mono" type="number" id="addQty" min="1" value="1" style="height:36px">
+            </div>
+            <div>
+              <div class="add-input-label">Precio unit.</div>
+              <input class="form-input text-mono" type="number" id="addPrice" min="0" step="0.01" placeholder="0.00" style="height:36px">
+            </div>
+            <div>
+              <button class="btn btn-primary" style="margin-top:20px" onclick="addItem()">
+                <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Añadir
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Products list -->
+        <div class="products-section">
+          <div class="products-section-header">
+            <h3>Artículos del pedido</h3>
+            <span id="itemCount">0</span>
+          </div>
+          <div id="emptyProducts" class="empty-products">
+            <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+            <p>Aún no hay artículos. Agrega un producto para comenzar.</p>
+          </div>
+          <table class="prod-table" id="prodTable" style="display:none">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Producto</th>
+                <th class="right">P. Unit.</th>
+                <th style="text-align:center;width:110px">Cantidad</th>
+                <th class="right">Subtotal</th>
+                <th style="width:36px"></th>
+              </tr>
+            </thead>
+            <tbody id="prodBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── Right column: summary ── -->
+      <div class="summary-card">
+        <h3>Resumen del pedido</h3>
+
+        <div class="summary-row">
+          <span>Subtotal</span>
+          <span class="summary-value" id="sumSubtotal">S/ 0.00</span>
+        </div>
+        <div class="summary-row" id="discountRow" style="display:none; color:var(--green)">
+          <span>Descuento (<span id="discPctLabel">0</span>%)</span>
+          <span class="summary-value" id="sumDiscount" style="color:var(--green)">− S/ 0.00</span>
+        </div>
+        <div class="summary-row total">
+          <span>Total</span>
+          <span class="summary-value" id="sumTotal">S/ 0.00</span>
+        </div>
+
+        <!-- Discount -->
+        <div class="discount-wrap">
+          <label>Descuento</label>
+          <div class="discount-presets">
+            <span class="disc-pill" onclick="setDiscount(5,this)">5%</span>
+            <span class="disc-pill" onclick="setDiscount(10,this)">10%</span>
+            <span class="disc-pill" onclick="setDiscount(15,this)">15%</span>
+            <span class="disc-pill" onclick="setDiscount(20,this)">20%</span>
+          </div>
+          <div class="discount-custom-row">
+            <input type="number" id="discInput" min="0" max="100" step="0.5" placeholder="0"
+              oninput="onDiscountInput()">
+            <span>%</span>
+          </div>
+          <div class="discount-saving" id="discSaving" style="display:none"></div>
+        </div>
+
+
+        <div style="margin-top:14px">
+          <button class="btn btn-primary" style="width:100%;height:42px;font-size:14px;justify-content:center;font-weight:700;letter-spacing:-0.01em" onclick="confirmOrder()">
+            Confirmar pedido
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</main>

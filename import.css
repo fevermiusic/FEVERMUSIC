@@ -1,0 +1,350 @@
+/* =========================================================
+   Musical Fever — Estilos de Importación / Checkboxes
+   ========================================================= */
+
+/* ── Barra de acciones en bulk ── */
+.bulk-bar {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--r);
+  margin-bottom: 12px;
+  animation: slideDown 0.15s ease;
+}
+.bulk-bar.visible { display: flex; }
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.bulk-count {
+  font-size: 13px; font-weight: 600; color: var(--accent); flex: 1;
+}
+.btn-bulk-delete {
+  height: 32px; padding: 0 14px; border-radius: var(--r-sm);
+  background: var(--red-bg); border: 1px solid #FECACA;
+  color: var(--red); font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: var(--font-ui);
+  display: flex; align-items: center; gap: 6px;
+  transition: background var(--t);
+}
+.btn-bulk-delete:hover { background: #FEE2E2; }
+.btn-bulk-select-all {
+  height: 32px; padding: 0 14px; border-radius: var(--r-sm);
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-3); font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: var(--font-ui);
+  transition: background var(--t), color var(--t), border-color var(--t);
+}
+.btn-bulk-select-all:hover { color: var(--ink); border-color: var(--ink); background: var(--surface-2); }
+
+/* ── Checkbox en tabla ──────────────────────────────────
+   Ocultos por defecto: solo se muestran cuando el contenedor
+   (tabla o lista de tarjetas) tiene la clase .selecting, activada
+   por el botón "Seleccionar" o por long-press (ver selection.js) */
+.col-check {
+  width: 0 !important; padding: 0 !important; overflow: hidden;
+  transition: width .15s ease;
+}
+.selecting .col-check {
+  width: 36px !important; padding-left: 14px !important; overflow: visible;
+}
+.col-check .row-checkbox { opacity: 0; pointer-events: none; transition: opacity .15s ease; }
+.selecting .col-check .row-checkbox { opacity: 1; pointer-events: auto; }
+
+.row-checkbox {
+  width: 15px; height: 15px; accent-color: var(--accent);
+  cursor: pointer;
+}
+tr.row-selected td { background: var(--accent-soft) !important; }
+
+/* ── Feedback visual durante la pulsación larga (antes de activar
+   el modo selección), para que se sienta más responsiva ── */
+.lp-pressing {
+  background: var(--accent-soft) !important;
+  transition: background 0.12s ease;
+}
+
+/* ── Botón "Seleccionar" ── */
+.btn-select.active {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.btn-select.active:hover { background: var(--accent-hover); color: #fff; }
+
+/* ── Botón importar ── */
+.btn-import {
+  height: 36px; padding: 0 14px; border-radius: var(--r-sm);
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text-2); font-size: 12.5px; font-weight: 600;
+  cursor: pointer; font-family: var(--font-ui);
+  display: inline-flex; align-items: center; gap: 7px;
+  transition: background var(--t), border-color var(--t);
+}
+.btn-import:hover { background: var(--surface-2); border-color: var(--accent); color: var(--accent); }
+.btn-import svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ── En modo selección solo deben quedar: Cancelar (el propio botón
+   "Seleccionar" pasa a decir "Cancelar"), Eliminar (bulk-bar) y
+   Exportar. "Importar" y "Nuevo cliente"/"Agregar producto" sobran. ── */
+.topbar-actions.selecting .btn-import,
+.topbar-actions.selecting .import-menu-wrap,
+.topbar-actions.selecting .btn-new-item {
+  display: none;
+}
+
+/* ── Modal de importación ── */
+.import-modal { max-width: 680px; }
+
+.import-steps { display: flex; gap: 8px; margin-bottom: 20px; }
+.import-step-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--border);
+}
+.import-step-dot.active { background: var(--accent); }
+
+.import-template-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); margin-bottom: 16px;
+}
+.import-template-bar span {
+  font-size: 12.5px; color: var(--text-2);
+}
+.btn-template {
+  height: 30px; padding: 0 12px; border-radius: var(--r-sm);
+  background: var(--accent-soft); border: 1px solid var(--accent-border);
+  color: var(--accent); font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: var(--font-ui);
+  display: flex; align-items: center; gap: 6px;
+  transition: background var(--t);
+}
+.btn-template:hover { background: rgba(37,99,235,0.14); }
+.btn-template svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.import-drop-area {
+  border: 2px dashed var(--border); border-radius: var(--r);
+  padding: 32px 24px; text-align: center; cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+}
+.import-drop-area:hover { border-color: var(--accent); background: var(--accent-soft); }
+.import-drop-area svg { width: 36px; height: 36px; stroke: var(--text-3); fill: none; stroke-width: 1.4; display: block; margin: 0 auto 10px; }
+.import-drop-area p { font-size: 13px; color: var(--text-3); margin: 0; }
+.import-drop-area strong { color: var(--accent); }
+.import-file-input { display: none; }
+
+/* ── Preview table ── */
+.import-preview-wrap {
+  max-height: 260px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  margin-bottom: 12px;
+}
+.import-preview-table {
+  width: 100%; border-collapse: collapse; font-size: 12.5px;
+}
+.import-preview-table th {
+  position: sticky; top: 0;
+  background: var(--surface-2); font-size: 10px; font-weight: 700;
+  color: var(--text-3); text-transform: uppercase; letter-spacing: .07em;
+  padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left;
+}
+.import-preview-table td {
+  padding: 7px 10px; border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+}
+.import-preview-table tr:last-child td { border-bottom: none; }
+.import-row-dup td { background: #FFFBEB; }
+.import-badge {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; padding: 2px 7px; border-radius: 20px;
+}
+.import-badge.new { background: var(--green-bg); color: var(--green); }
+.import-badge.dup { background: #FEF9C3; color: #B45309; }
+
+/* ── Menú desplegable del botón "Importar" ── */
+.import-menu-wrap { position: relative; }
+.import-menu {
+  display: none;
+  position: absolute; top: calc(100% + 6px); left: 0;
+  min-width: 260px; z-index: 40;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); box-shadow: 0 10px 30px rgba(0,0,0,.12);
+  padding: 6px; animation: slideDown 0.12s ease;
+}
+.import-menu.open { display: block; }
+.import-menu-item {
+  width: 100%; text-align: left; background: none; border: none;
+  border-radius: var(--r-sm); padding: 9px 10px; cursor: pointer;
+  font-family: var(--font-ui); display: flex; flex-direction: column; gap: 2px;
+  transition: background var(--t);
+}
+.import-menu-item:hover { background: var(--surface-2); }
+.import-menu-item strong { font-size: 12.5px; color: var(--text-1); font-weight: 700; }
+.import-menu-item span { font-size: 11px; color: var(--text-3); line-height: 1.35; }
+
+/* ── Celda "sin cambios" / filas omitidas en preview de importación ── */
+.import-nochange {
+  color: var(--text-3); font-style: italic; font-weight: 400;
+}
+.import-row-skip td { color: var(--text-3); }
+.import-badge.skip { background: var(--surface-2); color: var(--text-3); }
+
+.import-sanitized-flag { cursor: help; }
+
+/* ── Vista previa en modos sin nombre propio (Solo cantidad / Solo
+   precio / Cantidad y precio): nombre resuelto contra el producto YA
+   existente, y en "Solo cantidad" el resultado actual→final ── */
+.import-no-match { color: var(--red); font-style: italic; }
+.import-stock-hint { color: var(--text-3); font-size: 11px; margin-left: 4px; }
+
+/* ── Paso de conflictos: códigos que quedan iguales tras normalizar ── */
+.import-conflict-group {
+  border: 1px solid #FECACA; border-radius: var(--r-sm);
+  padding: 10px 12px; margin-bottom: 10px; background: #FEF2F2;
+}
+.import-conflict-group-title {
+  font-size: 11.5px; font-weight: 700; color: #7F1D1D;
+  text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px;
+}
+.import-conflict-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 6px 0; border-top: 1px solid #FCA5A5;
+}
+.import-conflict-row:first-of-type { border-top: none; padding-top: 0; }
+.import-conflict-meta { font-size: 12px; color: var(--text-2); flex: 1; min-width: 120px; }
+.import-conflict-input {
+  width: 160px; padding: 5px 8px; border: 1px solid #FCA5A5;
+  border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px;
+  text-transform: uppercase; background: var(--surface);
+}
+.import-conflict-input:focus { outline: none; border-color: var(--red); }
+.btn-import-omit {
+  font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: var(--r-sm);
+  border: 1px solid #FCA5A5; background: var(--surface); color: #B91C1C;
+  cursor: pointer; white-space: nowrap;
+}
+.btn-import-omit:hover { background: #FEE2E2; }
+.import-excluded-list {
+  font-size: 12px; color: var(--text-3); margin-top: 8px;
+}
+.btn-import-undo {
+  font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: var(--r-sm);
+  border: none; background: none; color: var(--accent); text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ── Detalle "se actualizarán" / "no encontrados" cuando NO hay conflictos ── */
+.import-update-detail {
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  padding: 10px 12px; margin-top: 10px; background: var(--surface-2);
+}
+.import-update-detail strong {
+  font-size: 11.5px; font-weight: 700; color: var(--text-2);
+  text-transform: uppercase; letter-spacing: .04em; display: block; margin-bottom: 6px;
+}
+.import-update-list {
+  list-style: none; margin: 0; padding: 0;
+  max-height: 180px; overflow-y: auto;
+}
+.import-update-list li {
+  font-size: 12.5px; color: var(--text-2);
+  padding: 4px 0; border-top: 1px solid var(--border);
+}
+.import-update-list li:first-child { border-top: none; }
+
+/* ── Duplicados ── */
+.dup-card {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 14px 16px; margin-bottom: 14px;
+}
+.dup-card-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--text-3); margin-bottom: 8px;
+}
+.dup-card-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.dup-field-label {
+  font-size: 10px; font-weight: 600; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.dup-field-value {
+  font-size: 13px; font-weight: 600; color: var(--text-1); margin-top: 2px;
+}
+.dup-actions { display: flex; gap: 8px; margin-top: 14px; }
+.btn-dup-omit {
+  flex: 1; height: 36px; border-radius: var(--r-sm);
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text-2); font-size: 12.5px; font-weight: 600;
+  cursor: pointer; font-family: var(--font-ui);
+  transition: background var(--t);
+}
+.btn-dup-omit:hover { background: var(--surface-2); }
+.btn-dup-update {
+  flex: 1; height: 36px; border-radius: var(--r-sm);
+  background: var(--accent); border: 1px solid var(--accent);
+  color: white; font-size: 12.5px; font-weight: 600;
+  cursor: pointer; font-family: var(--font-ui);
+  transition: background var(--t);
+}
+.btn-dup-update:hover { background: var(--accent-hover); }
+.btn-dup-cancel {
+  height: 36px; padding: 0 14px; border-radius: var(--r-sm);
+  background: transparent; border: 1px solid #FECACA;
+  color: var(--red); font-size: 12.5px; font-weight: 600;
+  cursor: pointer; font-family: var(--font-ui);
+  transition: background var(--t);
+}
+.btn-dup-cancel:hover { background: var(--red-bg); }
+
+.dup-progress {
+  font-size: 12px; color: var(--text-3); margin-bottom: 12px;
+}
+
+/* ── Duplicados: acción en bloque (reemplaza el flujo uno-por-uno) ── */
+.dup-bulk-actions { display: flex; gap: 8px; margin-top: 4px; }
+.btn-dup-omit-all {
+  flex: 1; height: 40px; border-radius: var(--r-sm);
+  background: var(--accent); border: 1px solid var(--accent);
+  color: #fff; font-size: 12.5px; font-weight: 600;
+  cursor: pointer; font-family: var(--font-ui);
+  transition: background var(--t);
+}
+.btn-dup-omit-all:hover { background: var(--accent-hover); }
+.dup-list-note {
+  font-size: 11.5px; color: var(--text-3); text-align: center;
+  padding: 8px 0 2px;
+}
+
+/* ── Done ── */
+.import-done {
+  text-align: center; padding: 24px 0;
+}
+.import-done-icon {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--green-bg); display: flex;
+  align-items: center; justify-content: center; margin: 0 auto 14px;
+}
+.import-done-icon svg { width: 24px; height: 24px; stroke: var(--green); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.import-done p { font-size: 14px; font-weight: 600; color: var(--text-1); margin: 0; }
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .dup-card-grid { grid-template-columns: 1fr; }
+  .dup-actions { flex-wrap: wrap; }
+
+  /* El botón "Importar" queda cerca del borde derecho cuando la
+     barra de acciones se envuelve en móvil (ver .topbar-actions en
+     base.css). El menú se anclaba con left:0, así que un
+     min-width:260px se salía de la pantalla por la derecha y el
+     texto quedaba cortado. Ahora se ancla por la derecha (crece
+     hacia la izquierda, que es donde SÍ hay espacio) y su ancho se
+     limita al viewport en vez de un mínimo fijo. */
+  .import-menu {
+    left: auto; right: 0;
+    min-width: 0;
+    width: min(280px, calc(100vw - 24px));
+  }
+}

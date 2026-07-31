@@ -1,0 +1,412 @@
+/* =========================================================
+   Musical Fever — Nueva Nota de Pedido · Estilos
+   ========================================================= */
+
+/* ── Layout 2-col: lista izquierda + resumen derecho ── */
+.nota-layout {
+  display: grid;
+  /* minmax(0, ...) en vez de 1fr/340px a secas: sin esto, un nombre
+     de cliente largo sin espacios (RUC 20601234567 con razón social
+     larga, ej. "ONCEBAY URCUHUARANGA DE URETA LAURA ELIZABETH") hace
+     que el navegador agrande esta columna más allá del ancho real de
+     la pantalla para "hacerle sitio" al texto que no puede cortarse
+     — y como en móvil el desborde se recorta sin scroll, todo lo
+     demás en esa columna (el aviso de "Aún no hay artículos...", los
+     botones, etc.) quedaba cortado en seco contra el borde derecho
+     en vez de acomodarse a la pantalla. minmax(0, 1fr) le dice al
+     navegador que el mínimo de esa columna es 0, no el ancho del
+     texto — así el nombre se recorta con "…" (como ya estaba pensado
+     en .client-card-name) en vez de estirar todo el layout. */
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+/* ── Tarjeta cliente ── */
+.client-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex; align-items: center; gap: 16px;
+}
+.client-card-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: var(--accent-soft); border: 1px solid var(--accent-border);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.client-card-icon svg { width: 20px; height: 20px; stroke: var(--accent); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.client-card-info { flex: 1; min-width: 0; }
+.client-card-name { font-size: 15px; font-weight: 700; color: var(--text-1); letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.client-card-ruc  { font-family: var(--font-mono); font-size: 12px; color: var(--text-3); margin-top: 3px; }
+
+/* ── Buscador de productos ── */
+.add-product-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.add-product-bar h3 {
+  font-size: 11px; font-weight: 700; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 12px;
+}
+.add-product-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px 110px auto;
+  gap: 8px; align-items: end;
+}
+.add-input-label { font-size: 11px; font-weight: 600; color: var(--text-3); margin-bottom: 5px; }
+
+/* Botón "limpiar" (X) dentro del buscador de producto */
+.product-input-wrap { position: relative; }
+.product-input-wrap .form-input { padding-right: 30px; }
+.product-search-clear {
+  position: absolute; top: 50%; right: 5px; transform: translateY(-50%);
+  width: 22px; height: 22px; padding: 0; border: none; border-radius: 50%;
+  background: var(--bg-2, #EEF1F6); color: var(--text-3);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background var(--t), color var(--t);
+}
+.product-search-clear svg { width: 12px; height: 12px; }
+.product-search-clear:hover  { background: var(--border); color: var(--text-1); }
+.product-search-clear:active { background: var(--red-bg, #FEE2E2); color: var(--red); }
+
+/* Hint de stock */
+.stock-hint {
+  font-size: 11px; color: var(--text-3); margin-top: 5px;
+  display: flex; align-items: center; gap: 4px;
+}
+.stock-hint.warn   { color: var(--amber); }
+.stock-hint.danger { color: var(--red); }
+.stock-hint.ok     { color: var(--green); }
+
+/* Autocompletado */
+.product-suggestions {
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-sm); box-shadow: var(--shadow-lg);
+  margin-top: 4px; max-height: 280px; overflow-y: auto;
+  z-index: 50;
+}
+.suggestion-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 9px 12px; cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--t);
+}
+.suggestion-item:last-child { border-bottom: none; }
+.suggestion-item:hover, .suggestion-item.highlighted { background: var(--accent-soft); }
+.suggestion-loading-more {
+  padding: 7px 12px; text-align: center;
+  font-size: 10.5px; color: var(--text-3);
+}
+.suggestion-main { display: flex; flex-direction: column; gap: 1px; }
+.suggestion-name  { font-size: 13px; font-weight: 600; color: var(--text-1); }
+.suggestion-code  { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); }
+.suggestion-meta  { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.suggestion-price { font-size: 12.5px; font-weight: 600; color: var(--text-1); font-family: var(--font-mono); }
+.suggestion-stock { font-size: 10.5px; font-weight: 600; font-family: var(--font-mono); }
+.suggestion-stock.stock-green { color: var(--green); }
+.suggestion-stock.stock-red   { color: var(--red); }
+.suggestion-empty { padding: 16px 12px; text-align: center; font-size: 12.5px; color: var(--text-3); }
+
+/* ── Tabla de artículos ── */
+.products-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 16px;
+}
+.products-section-header {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.products-section-header h3 {
+  font-size: 11px; font-weight: 700; color: var(--text-2);
+  text-transform: uppercase; letter-spacing: 0.09em;
+}
+.products-section-header span { font-size: 12px; color: var(--text-3); font-family: var(--font-mono); }
+
+.prod-table { width: 100%; border-collapse: collapse; }
+.prod-table th {
+  text-align: left; padding: 9px 14px;
+  font-size: 10px; font-weight: 700; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.09em;
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+}
+.prod-table th.right, .prod-table td.right { text-align: right; }
+.prod-table tbody tr { border-bottom: 1px solid var(--border); transition: background var(--t); }
+.prod-table tbody tr:last-child { border-bottom: none; }
+.prod-table tbody tr:hover { background: #F7F9FF; }
+.prod-table td { padding: 11px 14px; vertical-align: middle; }
+
+.prod-name { font-size: 13px; font-weight: 600; color: var(--text-1); }
+.prod-code { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); margin-top: 1px; }
+
+.qty-control { display: flex; align-items: center; gap: 4px; }
+.qty-btn {
+  width: 26px; height: 26px; border-radius: 6px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; color: var(--text-2);
+  transition: background var(--t), color var(--t);
+  line-height: 1; user-select: none;
+}
+.qty-btn:hover { background: var(--accent); border-color: var(--accent); color: white; }
+.qty-input {
+  width: 44px; height: 28px;
+  border: 1px solid var(--border); border-radius: 6px;
+  text-align: center; font-family: var(--font-mono); font-size: 13px;
+  font-weight: 600; color: var(--text-1); outline: none;
+  background: var(--surface);
+  transition: border-color var(--t), box-shadow var(--t);
+}
+.qty-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+
+.price-mono    { font-family: var(--font-mono); font-size: 13px; color: var(--text-2); }
+.subtotal-mono { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--text-1); }
+
+.price-edit-wrap {
+  display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+}
+.price-edit-prefix {
+  font-family: var(--font-mono); font-size: 12px; color: var(--text-3);
+}
+.price-input {
+  width: 68px; height: 28px;
+  border: 1px solid var(--border); border-radius: 6px;
+  text-align: right; font-family: var(--font-mono); font-size: 13px;
+  font-weight: 600; color: var(--text-1); outline: none;
+  background: var(--surface); padding: 0 6px;
+  transition: border-color var(--t), box-shadow var(--t);
+}
+.price-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+
+.btn-remove {
+  width: 28px; height: 28px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background var(--t), border-color var(--t);
+}
+.btn-remove:hover { background: var(--red-bg); border-color: #FECACA; }
+.btn-remove svg { width: 13px; height: 13px; stroke: var(--text-3); fill: none; stroke-width: 2.2; stroke-linecap: round; }
+.btn-remove:hover svg { stroke: var(--red); }
+
+.empty-products {
+  padding: 36px 24px; text-align: center;
+  font-size: 13px; color: var(--text-3);
+}
+.empty-products svg { width: 36px; height: 36px; stroke: #C9D3E6; fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; display: block; margin: 0 auto 10px; }
+
+/* ── Resumen / summary card ── */
+.summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  position: sticky; top: 22px;
+}
+.summary-card h3 {
+  font-size: 11px; font-weight: 700; color: var(--text-2);
+  text-transform: uppercase; letter-spacing: 0.09em;
+  margin-bottom: 16px;
+}
+
+.summary-row {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 13px; color: var(--text-2); margin-bottom: 8px;
+}
+.summary-row.total {
+  font-size: 15px; font-weight: 700; color: var(--text-1);
+  border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;
+  margin-bottom: 0;
+}
+.summary-value { font-family: var(--font-mono); font-weight: 600; }
+.summary-row.total .summary-value { font-size: 18px; letter-spacing: -0.02em; color: var(--accent); }
+
+/* Descuento */
+.discount-wrap {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 12px 14px; margin: 14px 0;
+}
+.discount-wrap label { font-size: 11px; font-weight: 700; color: var(--text-2); margin-bottom: 8px; display: block; text-transform: uppercase; letter-spacing: 0.06em; }
+
+.discount-presets { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
+.disc-pill {
+  padding: 4px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-2);
+  font-family: var(--font-mono);
+  transition: background var(--t), color var(--t), border-color var(--t);
+  user-select: none;
+}
+.disc-pill.active, .disc-pill:hover { background: var(--accent); color: white; border-color: var(--accent); }
+
+.discount-custom-row { display: flex; align-items: center; gap: 8px; }
+.discount-custom-row input {
+  flex: 1; height: 32px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 0 10px;
+  font-size: 13px; font-family: var(--font-mono); color: var(--text-1);
+  outline: none; transition: border-color var(--t), box-shadow var(--t);
+}
+.discount-custom-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.discount-custom-row span { font-size: 13px; color: var(--text-3); font-weight: 600; }
+
+.discount-saving {
+  font-size: 11.5px; color: var(--green); font-weight: 600;
+  margin-top: 8px; font-family: var(--font-mono);
+}
+
+/* ── Exportar ── */
+.export-section { margin-top: 16px; }
+.export-section label { font-size: 11px; font-weight: 700; color: var(--text-2); margin-bottom: 8px; display: block; text-transform: uppercase; letter-spacing: 0.06em; }
+.export-btns { display: flex; gap: 8px; }
+.btn-export {
+  flex: 1; height: 38px; border-radius: var(--r-sm);
+  font-size: 12.5px; font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  border: 1px solid transparent; font-family: var(--font-ui);
+  transition: background var(--t), border-color var(--t), box-shadow var(--t), transform 0.1s;
+}
+.btn-export:active { transform: scale(0.97); }
+.btn-export svg { width: 15px; height: 15px; flex-shrink: 0; }
+.btn-export-img {
+  background: #F0FDF4; color: #166534; border-color: #BBF7D0;
+}
+.btn-export-img:hover { background: #DCFCE7; border-color: #86EFAC; box-shadow: 0 2px 8px rgba(16,185,129,0.15); }
+.btn-export-img svg { stroke: #16a34a; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.btn-export-xls {
+  background: #EFF6FF; color: #1D4ED8; border-color: #BFDBFE;
+}
+.btn-export-xls:hover { background: #DBEAFE; border-color: #93C5FD; box-shadow: 0 2px 8px rgba(37,99,235,0.15); }
+.btn-export-xls svg { stroke: #2563EB; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Número de nota */
+.nota-number {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  color: var(--accent); background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 20px; padding: 4px 12px;
+}
+
+/* ── Responsive: móvil y tablets en vertical ──
+   768px dejaba afuera a las tablets en vertical (iPad mini/Air/Pro
+   miden entre 768 y 834px de ancho lógico) — a esos anchos, el
+   layout de escritorio de 2 columnas (tabla + resumen de 340px) no
+   entra: el buscador de productos queda apretadísimo y el resumen
+   se corta contra el borde derecho (main.main recorta el desborde
+   horizontal en ese rango, así que ni con scroll se llega a ver).
+   Subir el corte a 900px cubre esas tablets con el mismo layout
+   apilado que ya funciona bien en teléfono. */
+@media (max-width: 900px) {
+  .nota-layout { grid-template-columns: minmax(0, 1fr); }
+  .summary-card { position: static; }
+
+  .add-product-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .add-product-grid > div:first-child { grid-column: 1 / -1; }
+  .add-product-grid > div:last-child { grid-column: 1 / -1; }
+  .add-product-grid > div:last-child button { width: 100%; justify-content: center; }
+
+  .export-btns { flex-direction: row; }
+  .btn-export  { font-size: 12px; }
+
+  .prod-table, .prod-table thead, .prod-table tbody,
+  .prod-table tr, .prod-table td, .prod-table th {
+    display: block; width: 100%;
+  }
+  .prod-table thead { display: none; }
+  .prod-table tbody tr {
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    background: var(--surface);
+  }
+  .prod-table tbody tr:last-child { margin-bottom: 0; }
+  .prod-table td {
+    padding: 5px 0;
+    display: flex; align-items: center;
+    justify-content: space-between; gap: 10px;
+    text-align: right;
+  }
+  .prod-table td[data-label]::before {
+    content: attr(data-label);
+    font-size: 10px; font-weight: 700; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.07em;
+    text-align: left; flex: 0 0 auto; min-width: 60px;
+  }
+  .prod-table td[data-label=""] { 
+    position: absolute; top: 10px; right: 10px; 
+    padding: 0; border: none; width: auto; 
+    justify-content: flex-end;
+  }
+  .prod-table tbody tr { position: relative; padding-right: 44px; }
+  .prod-table .qty-control { justify-content: flex-end !important; }
+
+  .prod-name { font-size: 14px; }
+  .client-card-name { font-size: 14px; }
+  .nota-number { font-size: 11px; padding: 3px 9px; }
+
+  /* Botón limpiar más grande en teléfono: mejor zona de toque */
+  .product-search-clear { width: 28px; height: 28px; right: 6px; }
+  .product-search-clear svg { width: 14px; height: 14px; }
+  .product-input-wrap .form-input { padding-right: 36px; }
+}
+
+/* ── Ajuste de tamaño para tablets (601-900px) ──
+   La regla de arriba (≤900px) reusa el mismo tamaño "de teléfono
+   angosto" para todo. Pero de 601 a 900px ya no hay una barra
+   lateral de 340px robándole espacio a este contenido — con todo
+   ese ancho extra disponible, los mismos tamaños de teléfono se ven
+   chicos y apretados. Se agranda un poco fuente, padding y botones
+   sin llegar al tamaño de escritorio. */
+@media (min-width: 601px) and (max-width: 900px) {
+  .client-card { padding: 18px 22px; }
+  .client-card-name { font-size: 16px; }
+  .client-card-ruc { font-size: 13px; }
+
+  .add-product-bar { padding: 18px 20px; }
+  .add-product-bar h3 { font-size: 12px; }
+  .add-input-label { font-size: 12px; }
+  .add-product-grid .form-input { height: 42px; font-size: 14px; }
+  .add-product-grid button.btn-primary { height: 42px; font-size: 13.5px; }
+
+  .products-section-header h3 { font-size: 12px; }
+  .products-section-header span { font-size: 13px; }
+  .prod-table tbody tr { padding: 16px 18px; }
+  .prod-name { font-size: 15px; }
+  .prod-code { font-size: 12px; }
+  .prod-table td[data-label]::before { font-size: 11px; min-width: 80px; }
+
+  .qty-btn { width: 30px; height: 30px; font-size: 17px; }
+  .qty-input { width: 50px; height: 32px; font-size: 14px; }
+  .price-input { width: 78px; height: 32px; font-size: 14px; }
+  .price-mono, .subtotal-mono { font-size: 14px; }
+
+  .summary-card { padding: 24px; }
+  .summary-card h3 { font-size: 12px; }
+  .summary-row { font-size: 14px; }
+  .summary-row.total { font-size: 16px; }
+  .summary-row.total .summary-value { font-size: 20px; }
+
+  .disc-pill { padding: 6px 14px; font-size: 13px; }
+  .discount-custom-row input { height: 36px; font-size: 14px; }
+}
+
+@media (max-width: 390px) {
+  .export-btns { flex-direction: column; }
+}
