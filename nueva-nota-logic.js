@@ -199,7 +199,7 @@ function renderSuggestions() {
       <div class="suggestion-item ${highlighted}" onmousedown="selectProduct('${escapeJsAttr(safeCode)}')">
         <div class="suggestion-main">
           <span class="suggestion-name">${escapeHtml(safeName)}</span>
-          <span class="suggestion-code">${escapeHtml(safeCode)}</span>
+          <span class="suggestion-code">${escapeHtml(displayProductCode(safeCode))}</span>
         </div>
         <div class="suggestion-meta">
           <span class="suggestion-price">S/ ${safePrice}</span>
@@ -236,7 +236,7 @@ function selectProduct(code) {
   const safeCode = p.code || '';
   const stockVal = p.stock !== undefined ? p.stock : 0;
   
-  document.getElementById('productSearch').value       = `${safeName} (${safeCode})`;
+  document.getElementById('productSearch').value       = `${safeName} (${displayProductCode(safeCode)})`;
   document.getElementById('selectedProductCode').value = safeCode;
   document.getElementById('addPrice').value            = p.price !== undefined ? p.price : 0;
   document.getElementById('productSuggestions').style.display = 'none';
@@ -406,7 +406,7 @@ function renderItems() {
 
   body.innerHTML = items.map((item, idx) => `
     <tr data-idx="${idx}">
-      <td data-label="Código"><span style="font-family:var(--font-mono);font-size:11.5px;color:var(--text-3)">${escapeHtml(item.code)}</span></td>
+      <td data-label="Código"><span style="font-family:var(--font-mono);font-size:11.5px;color:var(--text-3)">${escapeHtml(displayProductCode(item.code))}</span></td>
       <td data-label="Producto"><div class="prod-name">${escapeHtml(item.name)}</div>${item.desc ? `<div class="prod-desc">${escapeHtml(item.desc)}</div>` : ''}</td>
       <td class="right" data-label="P. Unit.">
         <div class="price-edit-wrap">

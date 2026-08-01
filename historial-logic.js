@@ -204,7 +204,7 @@ function applyQuickRange(tipo) {
 // Se usa tanto para filtrar todo lo ya cargado como para decidir,
 // al llegar una página nueva del servidor, si esos pedidos entran
 // en lo que el usuario está buscando ahora mismo.
-function orderMatchesFilters(o, rawQ, q, isRuc, desde, hasta) {
+function orderMatchesFilters(o, rawQ, q, isRuc, desde, hasta, vendedorUid) {
   if (q) {
     if (isRuc) {
       const rucSlice = rawQ.slice(0, 11);
@@ -223,16 +223,60 @@ function orderMatchesFilters(o, rawQ, q, isRuc, desde, hasta) {
     if (hasta && ymd > hasta) return false;
   }
 
+  if (vendedorUid) {
+    if (!o.creadoPor || o.creadoPor.uid !== vendedorUid) return false;
+  }
+
   return true;
 }
 
 // ── Aplicar filtros ─────────────────────────────────────
+// ── Llena el <select> de Vendedor con los nombres que aparecen en
+//    las notas ya cargadas (no depende de /users, así que funciona
+//    igual para admin y vendedor). Se llama en cada applyFilters()
+//    porque ordersCache va creciendo con el scroll infinito — así,
+//    si aparece un vendedor nuevo al cargar más notas, entra a la
+//    lista sin que el usuario tenga que recargar la página. Conserva
+//    la opción ya seleccionada aunque se vuelva a armar la lista.
+function updateVendedorFilterOptions() {
+  const sel = document.getElementById('filterVendedor');
+  if (!sel) return;
+
+  const vendedores = new Map(); // uid -> nombre
+  ordersCache.forEach(o => {
+    if (o.creadoPor && o.creadoPor.uid) vendedores.set(o.creadoPor.uid, o.creadoPor.nombre || 'Sin nombre');
+  });
+
+  const currentValue = sel.value;
+  const nuevasOpciones = ['<option value="">Todos (general)</option>']
+    .concat(
+      Array.from(vendedores.entries())
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .map(([uid, nombre]) => `<option value="${escapeHtml(uid)}">${escapeHtml(nombre)}</option>`)
+    )
+    .join('');
+
+  if (sel.innerHTML !== nuevasOpciones) {
+    sel.innerHTML = nuevasOpciones;
+    // Si el vendedor que estaba seleccionado sigue en la lista nueva, se
+    // conserva; si no (ej. todavía no se cargó ninguna nota suya), se
+    // deja el valor tal cual el navegador lo intente restaurar.
+    if (Array.from(sel.options).some(opt => opt.value === currentValue)) {
+      sel.value = currentValue;
+    }
+  }
+}
+
 function applyFilters() {
   const searchEl = document.getElementById('searchInput');
   if (!searchEl) return; // la vista de Historial no está montada ahora mismo
   const rawQ   = (document.getElementById('searchInput').value || '').trim();
   const desde  = document.getElementById('filterDesde').value;
   const hasta  = document.getElementById('filterHasta').value;
+  const vendedorSel = document.getElementById('filterVendedor');
+  const vendedorUid = vendedorSel ? vendedorSel.value : '';
+
+  updateVendedorFilterOptions();
 
   const q = normalize(rawQ);
   const isRuc = /^\d+$/.test(rawQ);
@@ -258,7 +302,7 @@ function applyFilters() {
     return; // se vuelve a llamar applyFilters() cuando llegue esa página
   }
 
-  filteredOrders = ordersCache.filter(o => orderMatchesFilters(o, rawQ, q, isRuc, desde, hasta));
+  filteredOrders = ordersCache.filter(o => orderMatchesFilters(o, rawQ, q, isRuc, desde, hasta, vendedorUid));
 
   displayedCount = 0;
   renderBatch();
@@ -301,6 +345,7 @@ function renderBatch() {
         <td class="col-check"><input type="checkbox" class="row-checkbox hist-check" data-id="${escapeHtml(o.id)}" onchange="onHistCheckToggle(this)"></td>
         <td data-label="N° Nota"><span class="nota-num">${escapeHtml(o.numero)}</span></td>
         <td data-label="Cliente"><div class="client-hist">${escapeHtml(o.cliente)}</div><div class="ruc-hist">${escapeHtml(o.ruc)}</div></td>
+        <td data-label="Vendedor">${vendorBadge(o.creadoPor && o.creadoPor.nombre)}</td>
         <td data-label="Fecha"><span class="date-hist">${escapeHtml(o.fecha)}<br><span style="font-size:10.5px;color:var(--text-3)">${escapeHtml(o.hora)}</span></span></td>
         <td data-label="Total"><span class="total-hist">S/ ${fmtHist(o.total)}</span></td>
         <td data-label=""><div style="display:flex;justify-content:flex-end;align-items:center;gap:6px">
@@ -314,6 +359,7 @@ function renderBatch() {
           </div>
           <div class="hist-card-client">${escapeHtml(o.cliente)}</div>
           <div class="hist-card-ruc">RUC: ${escapeHtml(o.ruc)}</div>
+          ${o.creadoPor && o.creadoPor.nombre ? `<div style="margin-bottom:11px">${vendorBadge(o.creadoPor.nombre)}</div>` : ''}
           <div class="hist-card-bottom">
             <span class="hist-card-date">${escapeHtml(o.fecha)}</span>
             <div style="display:flex;align-items:center;gap:6px">
@@ -476,8 +522,10 @@ function clearFilters() {
   document.getElementById('searchInput').value = '';
   const desde = document.getElementById('filterDesde');
   const hasta = document.getElementById('filterHasta');
+  const vendedorSel = document.getElementById('filterVendedor');
   desde.value = '';
   hasta.value = '';
+  if (vendedorSel) vendedorSel.value = '';
   toggleDatePlaceholder(desde);
   toggleDatePlaceholder(hasta);
   applyFilters();
@@ -486,6 +534,33 @@ function clearFilters() {
 // ── Helper formato número ───────────────────────────────
 function fmtHist(n) {
   return (n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ── Color por vendedor ──────────────────────────────────
+// Le asigna a cada nombre de vendedor SIEMPRE el mismo color (un
+// hash simple del texto elige una posición fija en la paleta), así
+// se puede reconocer de un vistazo quién hizo cada nota sin tener
+// que leer el nombre completo cada vez.
+const VENDOR_COLOR_PALETTE = [
+  { bg: '#DBEAFE', fg: '#1E40AF' }, // azul
+  { bg: '#DCFCE7', fg: '#166534' }, // verde
+  { bg: '#FEF3C7', fg: '#92400E' }, // ámbar
+  { bg: '#FCE7F3', fg: '#9D174D' }, // rosa
+  { bg: '#EDE9FE', fg: '#5B21B6' }, // violeta
+  { bg: '#CFFAFE', fg: '#155E75' }, // cian
+  { bg: '#FFEDD5', fg: '#9A3412' }, // naranja
+  { bg: '#E0E7FF', fg: '#3730A3' }, // índigo
+];
+function vendorColor(nombre) {
+  const str = String(nombre || '');
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  return VENDOR_COLOR_PALETTE[hash % VENDOR_COLOR_PALETTE.length];
+}
+function vendorBadge(nombre) {
+  if (!nombre) return '<span class="date-hist">—</span>';
+  const c = vendorColor(nombre);
+  return `<span style="display:inline-block;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:600;background:${c.bg};color:${c.fg}">${escapeHtml(nombre)}</span>`;
 }
 
 // ── Badge de nota editada ────────────────────────────────

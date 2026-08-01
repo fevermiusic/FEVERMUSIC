@@ -221,6 +221,41 @@ function saveProduct(code, data, expectedStock, isNew) {
   return Promise.all([fieldsUpdate, stockUpdate]);
 }
 
+// Cambia la clave (código) de un producto ya existente. Firebase no
+// permite "mover" una clave directamente — hay que copiar los datos
+// a la clave nueva y borrar la vieja. Se hace en dos pasos seguros:
+// 1) se "reserva" la clave nueva con una transacción (igual que al
+//    crear un producto) para no pisar uno que otra persona haya
+//    creado con ese mismo código justo en ese instante;
+// 2) se mueve el dato real con un update() multi-ruta, que Firebase
+//    aplica de forma atómica (o se escriben ambas rutas, o ninguna).
+function renameProductCode(oldCode, newCode) {
+  const newRef = refProducts.child(newCode);
+  return newRef.transaction(current => {
+    if (current !== null) return; // aborta: ya existe un producto con el código nuevo
+    return true; // valor temporal, se reemplaza por los datos reales abajo
+  }).then(result => {
+    if (!result.committed) {
+      throw new Error(`Ya existe un producto con el código ${newCode}.`);
+    }
+    return refProducts.child(oldCode).once('value');
+  }).then(snap => {
+    const data = snap.val();
+    if (data === null) {
+      // El producto original desapareció entre que se abrió el modal
+      // y se guardó (ej. lo borraron desde otro dispositivo) — se
+      // libera la clave nueva que se había reservado y se avisa.
+      return newRef.remove().then(() => {
+        throw new Error('El producto original ya no existe.');
+      });
+    }
+    const updates = {};
+    updates[oldCode] = null;
+    updates[newCode] = data;
+    return refProducts.update(updates);
+  });
+}
+
 function deleteProduct(code) {
   try {
     return refProducts.child(code).remove();

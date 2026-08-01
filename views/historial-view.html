@@ -3,6 +3,7 @@
   .hist-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
 
   .col-num   { width: 130px; }
+  .col-vendedor { width: 120px; }
   .col-date  { width: 110px; }
   .col-total { width: 120px; text-align: right; }
   .col-act   { width: 90px; text-align: right; }
@@ -453,6 +454,12 @@
             <span class="date-placeholder" id="phHasta">dd/mm/aaaa</span>
           </div>
         </div>
+        <div class="filter-group" style="min-width:150px;max-width:190px">
+          <label class="filter-label">Vendedor</label>
+          <select class="filter-input" id="filterVendedor" onchange="applyFilters()">
+            <option value="">Todos (general)</option>
+          </select>
+        </div>
         <div class="quick-range-wrap">
           <button class="btn btn-ghost quick-range-btn" id="quickRangeBtn" onclick="toggleQuickRange(event)" title="Filtro rápido por fecha" type="button">
             <svg viewBox="0 0 24 24" width="16" height="16"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
@@ -524,6 +531,7 @@
             <th class="col-check"><input type="checkbox" class="row-checkbox" id="checkAllHist" onchange="toggleAllHist(this)"></th>
             <th class="col-num">N° Nota</th>
             <th>Cliente</th>
+            <th class="col-vendedor">Vendedor</th>
             <th class="col-date">Fecha</th>
             <th class="col-total">Total</th>
             <th class="col-act">Ver</th>

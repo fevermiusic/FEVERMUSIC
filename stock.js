@@ -28,6 +28,23 @@ function normalizeProductCode(raw) {
   return code;
 }
 
+// Convierte la clave interna de vuelta a lo que el usuario realmente
+// escribió, para CUALQUIER lugar donde el código se muestre en
+// pantalla (tarjetas, tabla, modal de editar, notas, Excel...).
+// Internamente el código se guarda con "⁄" (U+2044) en vez de "/"
+// porque Firebase no admite "/" dentro de una clave, pero mostrar
+// ese caracter tal cual en vez de convertirlo de vuelta a "/" hace
+// que a simple vista se vea casi idéntico a un guion normal — el
+// usuario edita, vuelve a escribir "/", y el resultado se ve
+// exactamente igual que antes, como si el cambio nunca se hubiera
+// guardado. Esta función es la única responsable de esa conversión
+// de vuelta, así que todo lo que el usuario VE siempre muestra "/"
+// tal cual lo tecleó, sin importar qué caracter se use por debajo
+// para guardarlo.
+function displayProductCode(code) {
+  return String(code || '').replace(/⁄/g, '/');
+}
+
 function fmtPrice(n) {
   const num = Number(n);
   if (isNaN(num)) return "0";
@@ -76,7 +93,7 @@ function productCardHtml(p) {
         </div>
         <div class="pc-code-wrap">
           <span class="pc-lbl">Código:</span>
-          <span class="pc-code">${escapeHtml(code)}</span>
+          <span class="pc-code">${escapeHtml(displayProductCode(code))}</span>
         </div>
         <button class="btn-icon-edit" title="Editar"
           onclick="openEditStock('${escapedCode}','${escapedName}','${stock}','${price}','${escapedCat}','${escapeJsAttr(desc)}')">
@@ -124,7 +141,7 @@ function productRowHtml(p) {
   return `
     <tr data-code="${escapeHtml(code)}" class="${isChecked ? 'row-selected' : ''}">
       ${showCheckbox ? `<td class="col-check"><input type="checkbox" class="row-checkbox stock-check" data-code="${escapeHtml(code)}" ${isChecked} onchange="onStockCheckToggle(this)"></td>` : ''}
-      <td class="pt-code">${escapeHtml(code)}</td>
+      <td class="pt-code">${escapeHtml(displayProductCode(code))}</td>
       <td class="pt-name">${escapeHtml(name)}</td>
       <td class="pt-desc">${desc ? escapeHtml(desc) : '<span class="pt-desc-empty">—</span>'}</td>
       <td class="pt-qty ${stockClass}">${stock}</td>
@@ -276,10 +293,14 @@ function outsideClose(e, id) {
 let editingCode = '';
 
 function openEditStock(code, name, stock, price, cat, desc) {
-  editingCode = code;
+  editingCode = code; // clave real de Firebase (con "⁄" si el código lleva "/")
   document.getElementById('editModalTitle').textContent = name;
-  document.getElementById('editModalCode').textContent  = code;
-  document.getElementById('editCode').value  = code;
+  // Se muestra siempre con "/" real, nunca con "⁄": si no se
+  // convierte aquí, el campo editable queda con el mismo caracter
+  // que el usuario ya considera "roto", y al volver a escribir "/"
+  // el resultado normalizado se ve idéntico a lo que había antes.
+  document.getElementById('editModalCode').textContent  = displayProductCode(code);
+  document.getElementById('editCode').value  = displayProductCode(code);
   document.getElementById('editName').value  = name;
   document.getElementById('editStock').value = stock;
   document.getElementById('editPrice').value = price;
@@ -294,18 +315,39 @@ function saveStock() {
   const price = parseFloat(document.getElementById('editPrice').value) || 0;
   const descEl = document.getElementById('editDesc');
   const desc  = descEl ? descEl.value.trim() : '';
+  // El campo Código pasa por el mismo normalizeProductCode que "Agregar",
+  // así que también acepta "/" (se guarda como ⁄, la clave de Firebase
+  // real no admite "/" literal, pero se ve igual en pantalla).
+  const newCode = normalizeProductCode(document.getElementById('editCode').value);
 
   if (!name) return alert('El nombre no puede estar vacío.');
+  if (!newCode) return alert('El código no puede estar vacío.');
+
+  const codeChanged = newCode !== editingCode;
+  if (codeChanged && productsCache.some(p => p.code === newCode)) {
+    return alert(`Ya existe un producto con el código ${newCode}.`);
+  }
 
   const existing = productsCache.find(p => p.code === editingCode) || {};
-  saveProduct(editingCode, {
+  const finalCode = codeChanged ? newCode : editingCode;
+
+  const doSave = () => saveProduct(finalCode, {
     name,
     desc,
     price,
     stock,
     category: existing.category || 'general'
-  }, existing.stock)
-    .then(() => closeModal('editModal'))
+  }, existing.stock);
+
+  const chain = codeChanged
+    ? renameProductCode(editingCode, newCode).then(doSave)
+    : doSave();
+
+  chain
+    .then(() => {
+      editingCode = finalCode;
+      closeModal('editModal');
+    })
     .catch(err => alert('Error al guardar: ' + err.message));
 }
 
@@ -351,6 +393,22 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     document.querySelectorAll('.modal-overlay.open')
       .forEach(m => closeModal(m.id));
+  }
+  // Enter en un campo de texto del modal de Editar o Agregar guarda
+  // igual que si se hiciera clic en el botón — antes no pasaba nada
+  // porque estos formularios no son un <form> real, así que Enter no
+  // tenía ninguna acción por defecto. Se excluyen los <textarea> para
+  // no interceptar el Enter que ahí sirve para bajar de línea.
+  if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+    const editModal = document.getElementById('editModal');
+    const addModal  = document.getElementById('addModal');
+    if (editModal && editModal.classList.contains('open') && editModal.contains(e.target)) {
+      e.preventDefault();
+      saveStock();
+    } else if (addModal && addModal.classList.contains('open') && addModal.contains(e.target)) {
+      e.preventDefault();
+      addProduct();
+    }
   }
 });
 
@@ -501,7 +559,7 @@ async function exportStock() {
 
   const data = [
     ['Código', 'Nombre', 'Descripción', 'Cantidad', 'Precio'],
-    ...rows.map(p => [p.code, sanitizeForExcel(p.name), sanitizeForExcel(p.desc || ''), p.stock, p.price])
+    ...rows.map(p => [displayProductCode(p.code), sanitizeForExcel(p.name), sanitizeForExcel(p.desc || ''), p.stock, p.price])
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = [{ wch: 12 }, { wch: 34 }, { wch: 28 }, { wch: 10 }, { wch: 10 }];

@@ -377,7 +377,7 @@ function renderFullPreviewList() {
 
   visibleRows.forEach(function(r) {
     var existing = pMap[r.normalizedCode];
-    var cells = ['<td class="mono">' + escapeHtml(r.code)
+    var cells = ['<td class="mono">' + escapeHtml(displayProductCode(r.code))
       + (r.sanitized ? ' <span class="import-sanitized-flag" title="Código original: ' + escapeHtml(r.originalCode) + ' — se quitaron caracteres especiales no permitidos">⚠</span>' : '')
       + '</td>'];
     if (r.name !== undefined) {
@@ -460,7 +460,7 @@ function buildExcludedRowsHtml() {
       + (row.stock !== undefined ? ' · Cant. ' + row.stock : '')
       + (row.price !== undefined ? ' · S/ ' + row.price.toFixed(2) : '');
     return '<div class="import-conflict-row">'
-      + '<input type="text" class="import-conflict-input" value="' + escapeHtml(currentCode) + '" '
+      + '<input type="text" class="import-conflict-input" value="' + escapeHtml(displayProductCode(currentCode)) + '" '
       + 'onchange="editExcludedRowCode(' + idx + ', this.value)" title="Código original en el archivo: ' + escapeHtml(row.originalCode) + ' — editá y se vuelve a incluir con este código">'
       + '<span class="import-conflict-meta">' + meta + '</span>'
       + '<button type="button" class="btn-import-undo" onclick="toggleImportRowExclude(' + idx + ')">Deshacer</button>'
@@ -549,7 +549,7 @@ function renderConflictStep() {
   var html = '';
   conflictGroups.forEach(function(g) {
     html += '<div class="import-conflict-group">'
-      + '<div class="import-conflict-group-title">Código en conflicto: <span class="mono">' + escapeHtml(g.normalizedCode) + '</span></div>';
+      + '<div class="import-conflict-group-title">Código en conflicto: <span class="mono">' + escapeHtml(displayProductCode(g.normalizedCode)) + '</span></div>';
     g.collisionRows.forEach(function(orig) {
       var origName = orig.name || (g.existing ? g.existing.name : '') || '—';
       var meta = escapeHtml(origName)
@@ -557,7 +557,7 @@ function renderConflictStep() {
         + (orig.stock !== undefined ? ' · Cant. ' + orig.stock : '')
         + (orig.price !== undefined ? ' · S/ ' + orig.price.toFixed(2) : '');
       html += '<div class="import-conflict-row">'
-        + '<input type="text" class="import-conflict-input" value="' + escapeHtml(orig.code) + '" '
+        + '<input type="text" class="import-conflict-input" value="' + escapeHtml(displayProductCode(orig.code)) + '" '
         + 'onchange="updateImportRowCode(' + orig.idx + ', this.value)" title="Código original en el archivo: ' + escapeHtml(orig.originalCode) + ' — editá para que esta fila deje de chocar con la otra">'
         + '<span class="import-conflict-meta">' + meta + '</span>'
         + '<button type="button" class="btn-import-omit" onclick="toggleImportRowExclude(' + orig.idx + ')">Omitir esta fila</button>'

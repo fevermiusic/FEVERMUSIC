@@ -104,7 +104,7 @@ function verNota(orderId) {
     const subtotal = item.price * item.qty;
     return `
       <tr>
-        <td data-label="Código" style="font-family:monospace;font-size:11px;color:#64748b">${escapeHtml(item.code)}</td>
+        <td data-label="Código" style="font-family:monospace;font-size:11px;color:#64748b">${escapeHtml(displayProductCode(item.code))}</td>
         <td data-label="Producto" style="font-size:12.5px;font-weight:500">${escapeHtml(item.name)}${item.desc ? `<div style="font-size:11px;font-weight:400;color:#94a3b8;margin-top:2px">${escapeHtml(item.desc)}</div>` : ''}</td>
         <td class="right" data-label="P. Unit." style="font-family:monospace;font-size:12.5px"><span class="curr">S/ </span>${fmt(item.price)}</td>
         <td class="right" data-label="Cant." style="font-family:monospace;font-size:12.5px">${item.qty}</td>
@@ -576,7 +576,7 @@ async function downloadNotaAs(tipo) {
       ];
 
       (o.items || []).forEach(item => {
-        rows.push([sanitizeForExcel(item.code), sanitizeForExcel(item.name), item.price || 0, item.qty || 0, item.itemDiscountPct || 0, (item.price || 0) * (item.qty || 0)]);
+        rows.push([sanitizeForExcel(displayProductCode(item.code)), sanitizeForExcel(item.name), item.price || 0, item.qty || 0, item.itemDiscountPct || 0, (item.price || 0) * (item.qty || 0)]);
       });
 
       rows.push([]);
@@ -913,12 +913,12 @@ async function exportSelectedExcel() {
   await ensureXLSXLoaded();
 
   const rows = [
-    ['N° Nota', 'Cliente', 'RUC', 'Fecha', 'Hora', 'Subtotal', 'Descuento %', 'Total']
+    ['N° Nota', 'Cliente', 'RUC', 'Vendedor', 'Fecha', 'Hora', 'Subtotal', 'Descuento %', 'Total']
   ];
   ordersCache
     .filter(o => selectedHistIds.has(o.id))
     .forEach(o => {
-      rows.push([sanitizeForExcel(o.numero), sanitizeForExcel(o.cliente), o.ruc, o.fecha, o.hora, o.subtotal || 0, o.descuentoPct || 0, o.total || 0]);
+      rows.push([sanitizeForExcel(o.numero), sanitizeForExcel(o.cliente), o.ruc, sanitizeForExcel((o.creadoPor && o.creadoPor.nombre) || ''), o.fecha, o.hora, o.subtotal || 0, o.descuentoPct || 0, o.total || 0]);
     });
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -946,10 +946,10 @@ async function exportHistorialExcel() {
   await ensureXLSXLoaded();
 
   const rows = [
-    ['N° Nota', 'Cliente', 'RUC', 'Fecha', 'Hora', 'Subtotal', 'Descuento %', 'Total']
+    ['N° Nota', 'Cliente', 'RUC', 'Vendedor', 'Fecha', 'Hora', 'Subtotal', 'Descuento %', 'Total']
   ];
   filteredOrders.forEach(o => {
-    rows.push([sanitizeForExcel(o.numero), sanitizeForExcel(o.cliente), o.ruc, o.fecha, o.hora, o.subtotal || 0, o.descuentoPct || 0, o.total || 0]);
+    rows.push([sanitizeForExcel(o.numero), sanitizeForExcel(o.cliente), o.ruc, sanitizeForExcel((o.creadoPor && o.creadoPor.nombre) || ''), o.fecha, o.hora, o.subtotal || 0, o.descuentoPct || 0, o.total || 0]);
   });
 
   const ws  = XLSX.utils.aoa_to_sheet(rows);
