@@ -35,11 +35,16 @@
           <div class="add-product-grid">
             <div style="position:relative">
               <div class="add-input-label">Producto</div>
-              <input class="form-input" type="text" id="productSearch" placeholder="Buscar por nombre o código…"
-                autocomplete="off"
-                oninput="onProductSearchInput()"
-                onfocus="onProductSearchInput()"
-                onblur="onProductSearchBlur()">
+              <div class="product-input-wrap">
+                <input class="form-input" type="text" id="productSearch" placeholder="Buscar por nombre o código…"
+                  autocomplete="off"
+                  oninput="onProductSearchInput()"
+                  onfocus="onProductSearchInput()"
+                  onblur="onProductSearchBlur()">
+                <button type="button" class="product-search-clear" id="productSearchClear" style="display:none" onmousedown="event.preventDefault()" onclick="clearProductSearch()" aria-label="Limpiar producto" title="Limpiar">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
               <input type="hidden" id="selectedProductCode" value="">
               <div id="productSuggestions" class="product-suggestions" style="display:none"></div>
               <div class="stock-hint" id="stockHint" style="display:none">
@@ -81,6 +86,7 @@
                 <th>Producto</th>
                 <th class="right">P. Unit.</th>
                 <th style="text-align:center;width:110px">Cantidad</th>
+                <th class="right" style="width:80px">Desc. %</th>
                 <th class="right">Subtotal</th>
                 <th style="width:36px"></th>
               </tr>

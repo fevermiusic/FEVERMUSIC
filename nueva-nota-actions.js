@@ -96,10 +96,13 @@ function confirmOrder() {
     cliente:      clientNombre,
     fecha:        isEdit ? (editingOriginalMeta.fecha || now.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: '2-digit' })) : now.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: '2-digit' }),
     hora:         isEdit ? (editingOriginalMeta.hora  || now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })) : now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
-    items:        items.map(i => ({ code: i.code, name: i.name, price: i.price, qty: i.qty })),
+    items:        items.map(i => ({ code: i.code, name: i.name, desc: i.desc || '', price: i.price, qty: i.qty, itemDiscountPct: i.itemDiscountPct || 0 })),
     subtotal,
     descuentoPct: discountPct,
     total,
+    // Cuántas veces se ha editado esta nota desde que se creó — se
+    // usa en Historial para marcar visualmente las notas editadas.
+    editCount:    isEdit ? (editingOriginalEditCount + 1) : 0,
     // Quién hizo esto — con cuentas individuales por vendedor, esto
     // es lo que le permite al admin rastrear una nota hasta la
     // persona exacta que la creó o la editó (antes era imposible:

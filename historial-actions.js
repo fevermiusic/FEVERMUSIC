@@ -105,9 +105,10 @@ function verNota(orderId) {
     return `
       <tr>
         <td data-label="Código" style="font-family:monospace;font-size:11px;color:#64748b">${escapeHtml(item.code)}</td>
-        <td data-label="Producto" style="font-size:12.5px;font-weight:500">${escapeHtml(item.name)}</td>
+        <td data-label="Producto" style="font-size:12.5px;font-weight:500">${escapeHtml(item.name)}${item.desc ? `<div style="font-size:11px;font-weight:400;color:#94a3b8;margin-top:2px">${escapeHtml(item.desc)}</div>` : ''}</td>
         <td class="right" data-label="P. Unit." style="font-family:monospace;font-size:12.5px"><span class="curr">S/ </span>${fmt(item.price)}</td>
         <td class="right" data-label="Cant." style="font-family:monospace;font-size:12.5px">${item.qty}</td>
+        <td class="right" data-label="Desc. %" style="font-family:monospace;font-size:12.5px;color:${item.itemDiscountPct ? '#059669' : '#94a3b8'}">${item.itemDiscountPct ? `−${item.itemDiscountPct}%` : '—'}</td>
         <td class="right" data-label="Subtotal" style="font-family:monospace;font-size:12.5px;font-weight:600"><span class="curr">S/ </span>${fmt(subtotal)}</td>
       </tr>
     `;
@@ -175,8 +176,9 @@ function editNota() {
     editNumero:   o.numero,
     editFecha:    o.fecha,
     editHora:     o.hora,
-    editItems:    (o.items || []).map(i => ({ code: i.code, name: i.name, price: i.price, qty: i.qty })),
-    editDiscount: o.descuentoPct || 0
+    editItems:    (o.items || []).map(i => ({ code: i.code, name: i.name, desc: i.desc || '', price: i.price, qty: i.qty, itemDiscountPct: i.itemDiscountPct || 0 })),
+    editDiscount: o.descuentoPct || 0,
+    editCount:    o.editCount || 0
   };
   if (window.Router) {
     Router.go('nueva-nota', { params });
@@ -377,10 +379,27 @@ async function captureNotaAsPdf() {
   y -= boxH + 22;
 
   // ── Tabla de productos ──
+  const items = o.items || [];
+
+  // El ancho de la columna CODIGO era fijo (64pt), pero códigos largos
+  // (ej. "FV3910CAM-SE") ocupan más que eso a tamaño 8.5 y el texto del
+  // producto empezaba a dibujarse encima, superponiéndose y dando una
+  // sensación poco profesional. Ahora se mide el código más ancho de
+  // ESTA nota y la columna Producto arranca después, con un margen de
+  // aire fijo — nunca se solapan sin importar qué tan largo sea el código.
+  const codeFontSize = 8.5;
+  const codeGap      = 14;
+  let maxCodeW = 0;
+  items.forEach(item => {
+    const w = font.widthOfTextAtSize(String(item.code || ''), codeFontSize);
+    if (w > maxCodeW) maxCodeW = w;
+  });
+
   const colCodeX  = margin;
-  const colProdX  = margin + 64;
-  const colPUnitR = margin + contentW - 132;
-  const colCantR  = margin + contentW - 78;
+  const colProdX  = Math.max(margin + 64, colCodeX + 6 + maxCodeW + codeGap);
+  const colPUnitR = margin + contentW - 190;
+  const colCantR  = margin + contentW - 130;
+  const colDiscR  = margin + contentW - 78;
   const colSubR   = margin + contentW;
   const rowH      = 22;
   const prodMaxW  = colPUnitR - colProdX - 55;
@@ -391,6 +410,7 @@ async function captureNotaAsPdf() {
     pg.drawText('PRODUCTO', { x: colProdX,     y: yTop - 14, size: 7.5, font: fontBold, color: cGray });
     drawRightTextOn(pg, 'P. UNIT.', colPUnitR, yTop - 14, 7.5, fontBold, cGray);
     drawRightTextOn(pg, 'CANT.',    colCantR,  yTop - 14, 7.5, fontBold, cGray);
+    drawRightTextOn(pg, 'DESC. %',  colDiscR,  yTop - 14, 7.5, fontBold, cGray);
     drawRightTextOn(pg, 'SUBTOTAL', colSubR,   yTop - 14, 7.5, fontBold, cGray);
     return yTop - 20;
   }
@@ -415,12 +435,15 @@ async function captureNotaAsPdf() {
 
   y = drawTableHeader(page, y);
 
-  const items = o.items || [];
   for (const item of items) {
     const subtotal  = (item.price || 0) * (item.qty || 0);
     const nameLines = wrapText(item.name, prodMaxW, font, 9.5);
+    const descLines = item.desc ? wrapText(item.desc, prodMaxW, font, 8) : [];
     const lineH     = 12;
-    const cellH     = Math.max(rowH, nameLines.length * lineH + 8);
+    const descLineH = 10.5;
+    const descGap   = descLines.length ? 3 : 0;
+    const textBlockH = nameLines.length * lineH + descGap + descLines.length * descLineH;
+    const cellH     = Math.max(rowH, textBlockH + 8);
 
     // Si no cabe en la página actual, crea una nueva página y repite el header
     if (y - cellH < bottomLimit) {
@@ -434,8 +457,20 @@ async function captureNotaAsPdf() {
     nameLines.forEach((line, i) => {
       page.drawText(line, { x: colProdX, y: textY - (i * lineH), size: 9.5, font, color: cInk });
     });
+    descLines.forEach((line, i) => {
+      page.drawText(line, {
+        x: colProdX,
+        y: textY - (nameLines.length * lineH) - descGap - (i * descLineH),
+        size: 8, font, color: cGrayLt
+      });
+    });
     drawRightTextOn(page, `S/ ${fmt(item.price)}`, colPUnitR, textY, 9, font, cGray);
     drawRightTextOn(page, String(item.qty || 0), colCantR, textY, 9, font, cGray);
+    if (item.itemDiscountPct) {
+      drawRightTextOn(page, `-${item.itemDiscountPct}%`, colDiscR, textY, 9, font, cGreen);
+    } else {
+      drawRightTextOn(page, '—', colDiscR, textY, 9, font, cGrayLt);
+    }
     drawRightTextOn(page, `S/ ${fmt(subtotal)}`, colSubR, textY, 9.5, fontBold, cInk);
 
     page.drawLine({
@@ -537,23 +572,23 @@ async function downloadNotaAs(tipo) {
         ['Cliente', sanitizeForExcel(o.cliente)],
         ['RUC', o.ruc],
         [],
-        ['Código', 'Producto', 'P. Unit.', 'Cant.', 'Subtotal']
+        ['Código', 'Producto', 'P. Unit.', 'Cant.', 'Desc. %', 'Subtotal']
       ];
 
       (o.items || []).forEach(item => {
-        rows.push([sanitizeForExcel(item.code), sanitizeForExcel(item.name), item.price || 0, item.qty || 0, (item.price || 0) * (item.qty || 0)]);
+        rows.push([sanitizeForExcel(item.code), sanitizeForExcel(item.name), item.price || 0, item.qty || 0, item.itemDiscountPct || 0, (item.price || 0) * (item.qty || 0)]);
       });
 
       rows.push([]);
-      rows.push(['', '', '', 'Subtotal', o.subtotal || 0]);
+      rows.push(['', '', '', '', 'Subtotal', o.subtotal || 0]);
       if (o.descuentoPct > 0) {
         const discAmt = (o.subtotal || 0) * (o.descuentoPct / 100);
-        rows.push(['', '', '', `Descuento (${o.descuentoPct}%)`, -discAmt]);
+        rows.push(['', '', '', '', `Descuento (${o.descuentoPct}%)`, -discAmt]);
       }
-      rows.push(['', '', '', 'TOTAL', o.total || 0]);
+      rows.push(['', '', '', '', 'TOTAL', o.total || 0]);
 
       const ws = XLSX.utils.aoa_to_sheet(rows);
-      ws['!cols'] = [{ wch: 12 }, { wch: 32 }, { wch: 12 }, { wch: 16 }, { wch: 14 }];
+      ws['!cols'] = [{ wch: 12 }, { wch: 32 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 14 }];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Nota');
 

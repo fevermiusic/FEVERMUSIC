@@ -19,6 +19,7 @@ let clientNombre = '';
 let editingOrderId      = null;
 let editingOriginalItems = null;
 let editingOriginalMeta  = null; // { fecha, hora } — se conservan al editar
+let editingOriginalEditCount = 0; // cuántas veces se editó esta nota antes de este guardado
 
 // Catálogo — antes esta vista mantenía su PROPIA copia (PRODUCTS)
 // con su propio watchProducts(), duplicando la misma conexión que
@@ -57,6 +58,7 @@ window.NuevaNota = {
       editingOrderId       = params.editOrderId;
       editingOriginalItems = (params.editItems || []).map(i => ({ code: i.code, qty: i.qty }));
       editingOriginalMeta  = { fecha: params.editFecha || '', hora: params.editHora || '' };
+      editingOriginalEditCount = params.editCount || 0;
 
       // maxStock = stock real actual del producto + la cantidad que
       // ya tenía esta nota (porque esa cantidad se le devuelve al
@@ -69,7 +71,9 @@ window.NuevaNota = {
       items = (params.editItems || []).map(i => {
         const live = productsCache.find(p => p.code === i.code);
         const liveStock = live ? live.stock : 0;
-        return { ...i, subtotal: i.price * i.qty, maxStock: liveStock + i.qty };
+        const merged = { ...i, itemDiscountPct: i.itemDiscountPct || 0, maxStock: liveStock + i.qty };
+        merged.subtotal = computeItemSubtotal(merged);
+        return merged;
       });
       discountPct = params.editDiscount || 0;
       const discInput = document.getElementById('discInput');
@@ -83,6 +87,7 @@ window.NuevaNota = {
       editingOrderId       = null;
       editingOriginalItems = null;
       editingOriginalMeta  = null;
+      editingOriginalEditCount = 0;
 
       items       = [];
       discountPct = 0;
@@ -342,9 +347,11 @@ function addItem() {
     // se acaba de ingresar (aplica a todas las unidades del renglón).
     existing.qty  += qty;
     existing.price = price;
-    existing.subtotal = round2(existing.qty * existing.price);
+    existing.subtotal = computeItemSubtotal(existing);
   } else {
-    items.push({ code: p.code, name: p.name, price, qty, subtotal: round2(qty * price), maxStock: stock });
+    const newItem = { code: p.code, name: p.name, desc: p.desc || '', price, qty, itemDiscountPct: 0, maxStock: stock };
+    newItem.subtotal = computeItemSubtotal(newItem);
+    items.push(newItem);
   }
 
   renderItems();
@@ -400,7 +407,7 @@ function renderItems() {
   body.innerHTML = items.map((item, idx) => `
     <tr data-idx="${idx}">
       <td data-label="Código"><span style="font-family:var(--font-mono);font-size:11.5px;color:var(--text-3)">${escapeHtml(item.code)}</span></td>
-      <td data-label="Producto"><div class="prod-name">${escapeHtml(item.name)}</div></td>
+      <td data-label="Producto"><div class="prod-name">${escapeHtml(item.name)}</div>${item.desc ? `<div class="prod-desc">${escapeHtml(item.desc)}</div>` : ''}</td>
       <td class="right" data-label="P. Unit.">
         <div class="price-edit-wrap">
           <span class="price-edit-prefix">S/</span>
@@ -414,6 +421,13 @@ function renderItems() {
           <input class="qty-input" id="qtyInput-${idx}" type="number" value="${item.qty}" min="1" max="${item.maxStock}"
             onchange="setQty(${idx},this.value)">
           <button class="qty-btn" onclick="changeQty(${idx},1)">+</button>
+        </div>
+      </td>
+      <td class="right" data-label="Desc. %">
+        <div class="price-edit-wrap">
+          <input class="price-input" id="itemDiscInput-${idx}" type="number" value="${item.itemDiscountPct || 0}" min="0" max="100" step="0.5"
+            onchange="setItemDiscount(${idx},this.value)" style="width:52px">
+          <span class="price-edit-prefix">%</span>
         </div>
       </td>
       <td class="right" data-label="Subtotal"><span class="subtotal-mono" id="subtotalCell-${idx}">S/ ${fmt(item.subtotal)}</span></td>
@@ -445,10 +459,20 @@ function updateRowDisplay(idx) {
   if (!item) return;
   const qtyEl   = document.getElementById(`qtyInput-${idx}`);
   const priceEl = document.getElementById(`priceInput-${idx}`);
+  const discEl  = document.getElementById(`itemDiscInput-${idx}`);
   const subEl   = document.getElementById(`subtotalCell-${idx}`);
   if (qtyEl)   qtyEl.value       = item.qty;
   if (priceEl) priceEl.value     = item.price;
+  if (discEl)  discEl.value      = item.itemDiscountPct || 0;
   if (subEl)   subEl.textContent = `S/ ${fmt(item.subtotal)}`;
+}
+
+// Recalcula el subtotal de una línea aplicando su descuento propio,
+// independiente del descuento general del pedido.
+function computeItemSubtotal(item) {
+  const gross = item.qty * item.price;
+  const pct   = item.itemDiscountPct || 0;
+  return round2(gross * (1 - pct / 100));
 }
 
 function changeQty(idx, delta) {
@@ -457,7 +481,7 @@ function changeQty(idx, delta) {
   if (newQty < 1) return;
   if (newQty > item.maxStock) return alert(`Stock máximo: ${item.maxStock}`);
   item.qty      = newQty;
-  item.subtotal = round2(item.qty * item.price);
+  item.subtotal = computeItemSubtotal(item);
   updateRowDisplay(idx);
   recalc();
 }
@@ -468,7 +492,7 @@ function setQty(idx, val) {
   if (q < 1) q = 1;
   if (q > item.maxStock) { q = item.maxStock; alert(`Stock máximo: ${item.maxStock}`); }
   item.qty      = q;
-  item.subtotal = round2(item.qty * item.price);
+  item.subtotal = computeItemSubtotal(item);
   updateRowDisplay(idx);
   recalc();
 }
@@ -478,7 +502,18 @@ function setPrice(idx, val) {
   let p = parseFloat(val);
   if (isNaN(p) || p < 0) p = 0;
   item.price    = p;
-  item.subtotal = round2(item.qty * item.price);
+  item.subtotal = computeItemSubtotal(item);
+  updateRowDisplay(idx);
+  recalc();
+}
+
+function setItemDiscount(idx, val) {
+  const item = items[idx];
+  let d = parseFloat(val);
+  if (isNaN(d) || d < 0) d = 0;
+  if (d > 100) d = 100;
+  item.itemDiscountPct = d;
+  item.subtotal = computeItemSubtotal(item);
   updateRowDisplay(idx);
   recalc();
 }

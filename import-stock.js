@@ -24,7 +24,7 @@ var IMPORT_MODE_CONFIG = {
       ['GTR-001', 'Guitarra Electroacustica Yamaha', 'APX600 Natural', 10, 890]
     ],
     templateColWidths: [12, 34, 28, 10, 10],
-    tableCols: ['Codigo', 'Nombre', 'Cant.', 'Precio', 'Estado']
+    tableCols: ['Codigo', 'Nombre', 'Descripcion', 'Cant.', 'Precio', 'Estado']
   },
   both: {
     label: 'Cantidad y precio',
@@ -393,6 +393,9 @@ function renderFullPreviewList() {
       cells.push('<td' + (existing ? '' : ' class="import-no-match"') + '>'
         + (existName ? escapeHtml(existName) : 'No encontrado') + '</td>');
     }
+    if (r.desc !== undefined) {
+      cells.push('<td class="import-desc-cell">' + (r.desc ? escapeHtml(r.desc) : '<span class="pt-desc-empty">—</span>') + '</td>');
+    }
     if (r.stock !== undefined) {
       var curStock = existing ? (parseInt(existing.stock) || 0) : null;
       var stockCell = '<span class="mono">+' + r.stock + '</span>';
@@ -453,6 +456,7 @@ function buildExcludedRowsHtml() {
     if (!row) return '';
     var currentCode = importStockCodeOverrides[idx] ? normalizeProductCode(importStockCodeOverrides[idx]) : row.code;
     var meta = escapeHtml(row.name || '—')
+      + (row.desc ? ' · ' + escapeHtml(row.desc) : '')
       + (row.stock !== undefined ? ' · Cant. ' + row.stock : '')
       + (row.price !== undefined ? ' · S/ ' + row.price.toFixed(2) : '');
     return '<div class="import-conflict-row">'
@@ -549,6 +553,7 @@ function renderConflictStep() {
     g.collisionRows.forEach(function(orig) {
       var origName = orig.name || (g.existing ? g.existing.name : '') || '—';
       var meta = escapeHtml(origName)
+        + (orig.desc ? ' · ' + escapeHtml(orig.desc) : '')
         + (orig.stock !== undefined ? ' · Cant. ' + orig.stock : '')
         + (orig.price !== undefined ? ' · S/ ' + orig.price.toFixed(2) : '');
       html += '<div class="import-conflict-row">'

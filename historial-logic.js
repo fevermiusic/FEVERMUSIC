@@ -295,6 +295,7 @@ function renderBatch() {
 
   body.insertAdjacentHTML('beforeend', slice.map(o => {
     const escapedId = escapeJsAttr(o.id || '');
+    const editBadge = renderEditBadge(o.editCount);
     return `
       <tr data-id="${escapeHtml(o.id)}">
         <td class="col-check"><input type="checkbox" class="row-checkbox hist-check" data-id="${escapeHtml(o.id)}" onchange="onHistCheckToggle(this)"></td>
@@ -302,7 +303,8 @@ function renderBatch() {
         <td data-label="Cliente"><div class="client-hist">${escapeHtml(o.cliente)}</div><div class="ruc-hist">${escapeHtml(o.ruc)}</div></td>
         <td data-label="Fecha"><span class="date-hist">${escapeHtml(o.fecha)}<br><span style="font-size:10.5px;color:var(--text-3)">${escapeHtml(o.hora)}</span></span></td>
         <td data-label="Total"><span class="total-hist">S/ ${fmtHist(o.total)}</span></td>
-        <td data-label=""><div style="display:flex;justify-content:flex-end">
+        <td data-label=""><div style="display:flex;justify-content:flex-end;align-items:center;gap:6px">
+          ${editBadge}
           <button class="btn btn-ghost" style="height:28px;font-size:11.5px;padding:0 9px" onclick="verNota('${escapedId}')">Ver</button>
         </div></td>
         <td class="hist-card-mobile">
@@ -314,7 +316,10 @@ function renderBatch() {
           <div class="hist-card-ruc">RUC: ${escapeHtml(o.ruc)}</div>
           <div class="hist-card-bottom">
             <span class="hist-card-date">${escapeHtml(o.fecha)}</span>
-            <button class="btn hist-card-btn" onclick="verNota('${escapedId}')">Ver detalle</button>
+            <div style="display:flex;align-items:center;gap:6px">
+              ${editBadge}
+              <button class="btn hist-card-btn" onclick="verNota('${escapedId}')">Ver detalle</button>
+            </div>
           </div>
         </td>
       </tr>
@@ -481,4 +486,20 @@ function clearFilters() {
 // ── Helper formato número ───────────────────────────────
 function fmtHist(n) {
   return (n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ── Badge de nota editada ────────────────────────────────
+// Verde: editada 1 vez. Amarillo: 2 veces. Rojo: 3 o más veces.
+// No se muestra nada si la nota nunca fue editada.
+function renderEditBadge(editCount) {
+  const n = editCount || 0;
+  if (n <= 0) return '';
+  let color, bg;
+  if (n === 1)      { color = '#059669'; bg = '#D1FAE5'; } // verde
+  else if (n === 2) { color = '#B45309'; bg = '#FEF3C7'; } // amarillo
+  else              { color = '#DC2626'; bg = '#FEE2E2'; } // rojo
+  return `<span class="edit-badge" title="Editada ${n} ${n === 1 ? 'vez' : 'veces'}" `
+    + `style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;`
+    + `padding:0 5px;border-radius:999px;font-size:10.5px;font-weight:700;`
+    + `font-family:var(--font-mono, monospace);color:${color};background:${bg}">${n}</span>`;
 }

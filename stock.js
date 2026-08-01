@@ -79,7 +79,7 @@ function productCardHtml(p) {
           <span class="pc-code">${escapeHtml(code)}</span>
         </div>
         <button class="btn-icon-edit" title="Editar"
-          onclick="openEditStock('${escapedCode}','${escapedName}','${stock}','${price}','${escapedCat}')">
+          onclick="openEditStock('${escapedCode}','${escapedName}','${stock}','${price}','${escapedCat}','${escapeJsAttr(desc)}')">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -131,7 +131,7 @@ function productRowHtml(p) {
       <td class="pt-price">S/ ${fmtPrice(price)}</td>
       <td>
         <button class="btn btn-ghost btn-sm stock-edit-btn" title="Editar"
-          onclick="openEditStock('${escapedCode}','${escapedName}','${stock}','${price}','${escapedCat}')">
+          onclick="openEditStock('${escapedCode}','${escapedName}','${stock}','${price}','${escapedCat}','${escapeJsAttr(desc)}')">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -275,7 +275,7 @@ function outsideClose(e, id) {
 /* ── Editar ── */
 let editingCode = '';
 
-function openEditStock(code, name, stock, price, cat) {
+function openEditStock(code, name, stock, price, cat, desc) {
   editingCode = code;
   document.getElementById('editModalTitle').textContent = name;
   document.getElementById('editModalCode').textContent  = code;
@@ -283,6 +283,8 @@ function openEditStock(code, name, stock, price, cat) {
   document.getElementById('editName').value  = name;
   document.getElementById('editStock').value = stock;
   document.getElementById('editPrice').value = price;
+  const descEl = document.getElementById('editDesc');
+  if (descEl) descEl.value = desc || '';
   openModal('editModal');
 }
 
@@ -290,13 +292,15 @@ function saveStock() {
   const name  = document.getElementById('editName').value.trim();
   const stock = parseInt(document.getElementById('editStock').value)   || 0;
   const price = parseFloat(document.getElementById('editPrice').value) || 0;
+  const descEl = document.getElementById('editDesc');
+  const desc  = descEl ? descEl.value.trim() : '';
 
   if (!name) return alert('El nombre no puede estar vacío.');
 
   const existing = productsCache.find(p => p.code === editingCode) || {};
   saveProduct(editingCode, {
     name,
-    desc: existing.desc || '',
+    desc,
     price,
     stock,
     category: existing.category || 'general'
@@ -319,15 +323,17 @@ function addProduct() {
   const code  = normalizeProductCode(document.getElementById('addCode').value);
   const stock = parseInt(document.getElementById('addStock').value)   || 0;
   const price = parseFloat(document.getElementById('addPrice').value) || 0;
+  const descEl = document.getElementById('addDesc');
+  const desc  = descEl ? descEl.value.trim() : '';
 
   if (!name || !code) return alert('Completa nombre y código.');
   if (productsCache.some(p => p.code === code))
     return alert(`Ya existe un producto con el código ${code}.`);
 
-  saveProduct(code, { name, desc: '', price, stock, category: 'general' }, undefined, true)
+  saveProduct(code, { name, desc, price, stock, category: 'general' }, undefined, true)
     .then(() => {
       closeModal('addModal');
-      ['addName','addCode','addStock','addPrice'].forEach(id => {
+      ['addName','addCode','addDesc','addStock','addPrice'].forEach(id => {
         document.getElementById(id).value = '';
       });
     })
