@@ -241,6 +241,7 @@ function orderMatchesFilters(o, rawQ, q, isRuc, desde, hasta, vendedorUid) {
 function updateVendedorFilterOptions() {
   const sel = document.getElementById('filterVendedor');
   if (!sel) return;
+  if (currentUserRole === 'vendedor') return; // oculto y forzado a su propio uid, no hace falta poblarlo
 
   const vendedores = new Map(); // uid -> nombre
   ordersCache.forEach(o => {
@@ -274,7 +275,15 @@ function applyFilters() {
   const desde  = document.getElementById('filterDesde').value;
   const hasta  = document.getElementById('filterHasta').value;
   const vendedorSel = document.getElementById('filterVendedor');
-  const vendedorUid = vendedorSel ? vendedorSel.value : '';
+  // ── Rol "vendedor": SIEMPRE se fuerza su propio uid, sin importar
+  // qué tenga el <select> (que además está oculto para este rol, ver
+  // applyHistorialRoleRestrictions). Antes el filtro por vendedor era
+  // 100% opcional, así que un vendedor podía ver en su propio
+  // Historial las notas hechas por CUALQUIER otro vendedor — esto
+  // cierra ese hueco: un vendedor jamás ve ventas ajenas, solo admin.
+  const vendedorUid = (currentUserRole === 'vendedor')
+    ? currentUserUid
+    : (vendedorSel ? vendedorSel.value : '');
 
   updateVendedorFilterOptions();
 
@@ -345,7 +354,7 @@ function renderBatch() {
         <td class="col-check"><input type="checkbox" class="row-checkbox hist-check" data-id="${escapeHtml(o.id)}" onchange="onHistCheckToggle(this)"></td>
         <td data-label="N° Nota"><span class="nota-num">${escapeHtml(o.numero)}</span></td>
         <td data-label="Cliente"><div class="client-hist">${escapeHtml(o.cliente)}</div><div class="ruc-hist">${escapeHtml(o.ruc)}</div></td>
-        <td data-label="Vendedor">${vendorBadge(o.creadoPor && o.creadoPor.nombre)}</td>
+        <td class="col-vendedor" data-label="Vendedor">${vendorBadge(o.creadoPor && o.creadoPor.nombre)}</td>
         <td data-label="Fecha"><span class="date-hist">${escapeHtml(o.fecha)}<br><span style="font-size:10.5px;color:var(--text-3)">${escapeHtml(o.hora)}</span></span></td>
         <td data-label="Total"><span class="total-hist">S/ ${fmtHist(o.total)}</span></td>
         <td data-label=""><div style="display:flex;justify-content:flex-end;align-items:center;gap:6px">
@@ -497,13 +506,28 @@ function applyHistorialRoleRestrictions() {
   // "Editar" y "Eliminar" en el detalle de la nota están disponibles
   // tanto para admin como para vendedor.
 
+  // El filtro "Vendedor" no tiene sentido para este rol: su Historial
+  // ya está forzado (en applyFilters) a mostrar solo SUS propias
+  // notas, así que el <select> y su label se ocultan por completo en
+  // vez de dejarlo visible sin efecto real.
+  const vendedorSel = document.getElementById('filterVendedor');
+  if (vendedorSel) {
+    const wrap = vendedorSel.closest('.filter-group') || vendedorSel.parentElement;
+    if (wrap) wrap.style.display = 'none';
+  }
+
   // La columna de checkbox se genera en cada fila dentro de
   // renderBatch(), así que en vez de tocar ese HTML se oculta por
-  // CSS (header y celdas comparten la clase "col-check").
+  // CSS (header y celdas comparten la clase "col-check"). Ídem la
+  // columna "Vendedor": para este rol siempre es su propio nombre
+  // repetido en cada fila, así que no aporta información y solo
+  // ocupa espacio — se oculta también por CSS (header y celdas
+  // comparten la clase "col-vendedor").
   if (!document.getElementById('historialRoleStyle')) {
     const style = document.createElement('style');
     style.id = 'historialRoleStyle';
-    style.textContent = '.table-wrap .col-check { display: none !important; }';
+    style.textContent = '.table-wrap .col-check { display: none !important; } '
+      + '.table-wrap .col-vendedor { display: none !important; }';
     document.head.appendChild(style);
   }
 }
