@@ -11,6 +11,7 @@
     "products": {
       ".read": "auth != null",
       ".write": "auth != null && auth.token.email == 'fevermiusiclog@gmail.com'",
+      ".indexOn": ["updatedAt"],
       "$code": {
         "name":     { ".validate": "newData.isString() && newData.val().length > 0" },
         "price":    { ".validate": "newData.isNumber() && newData.val() >= 0" },
@@ -23,6 +24,7 @@
     },
     "clients": {
       ".read": "auth != null",
+      ".indexOn": ["updatedAt"],
       "$ruc": {
         ".write": "auth != null && (auth.token.email == 'fevermiusiclog@gmail.com' || !data.exists()) && root.child('users').child(auth.uid).child('activo').val() !== false",
         "nombre": { ".validate": "newData.isString() && newData.val().length > 0" },

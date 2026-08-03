@@ -77,3 +77,16 @@ QUÉ CAMBIÓ EN EL RESTO, EN SIMPLE
   total/timestamp con los tipos correctos — ya confirmé que así es
   exactamente como la app arma cada pedido, así que esto no debería
   bloquear nada en el uso normal.
+
+NUEVO (para no gastar los 10GB/mes de descarga del plan gratis)
+------------------------------------------------------------
+Se agregó ".indexOn": ["updatedAt"] dentro de "products" y "clients".
+Esto es NECESARIO para que la app pueda pedirle a Firebase "solo lo
+que cambió desde la última vez" en vez de bajar todo el catálogo de
+productos/clientes cada vez que alguien abre la app — sin este
+índice, Firebase igual puede resolver esa consulta, pero lo hace
+bajando el nodo completo del lado del servidor para filtrarlo ahí, lo
+que anula el ahorro por completo. Si ya tenías las reglas viejas
+publicadas, tenés que volver a pegar y publicar este archivo entero
+para que tome el índice nuevo — no alcanza con solo actualizar la
+app, las reglas viven aparte en Firebase Console.

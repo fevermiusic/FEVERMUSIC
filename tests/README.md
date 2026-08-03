@@ -28,6 +28,23 @@ subconjunto real de Firebase que usa la app (ver
   el mismo código al mismo tiempo no se pisen entre sí, y que la
   numeración de notas sea correlativa.
 
+- **tests/cache-sincronizacion.test.js** — Caché local +
+  sincronización incremental de `watchProducts`/`watchClients` (ver
+  el bloque "CACHÉ LOCAL + SINCRONIZACIÓN INCREMENTAL" en
+  `firebase.js`). Confirma que toda escritura marca `updatedAt`, que
+  un alta/cambio de otro dispositivo se refleja vía la consulta
+  incremental sin re-bajar todo el catálogo, y que un borrado NO se
+  refleja hasta la próxima resincronización completa (limitación
+  conocida y aceptada, no un bug).
+
+- **tests/codigo-normalizacion.test.js** — Casos límite de
+  `normalizeProductCode` / `sanitizeFirebaseKey` / `mergeStockRows`
+  (relleno de ancho fijo de Excel, símbolos repetidos, unicode,
+  mayúsculas/acentos, barra "/", códigos vacíos o solo de símbolos).
+  Confirma que las colisiones esperadas SÍ se agrupan y las que no
+  corresponden NO se mezclan, y que el "merge" de filas en conflicto
+  las marca en vez de fusionarlas en silencio.
+
 - **tests/views-sync.test.js** — Corre `scripts/check-views-sync.js`
   y falla si `views/*.html` quedó desactualizado respecto a lo que
   `router.js` realmente usa.

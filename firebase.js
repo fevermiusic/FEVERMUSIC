@@ -102,55 +102,151 @@ const refOrders   = db.ref('orders');
 const refUsers    = db.ref('users');
 
 // =========================================================
-// PRODUCTOS
+// CACHÉ LOCAL + SINCRONIZACIÓN INCREMENTAL (products / clients)
 // =========================================================
+//
+// Por qué existe esto: watchProducts/watchClients usaban
+// refX.on('child_added'/'child_changed'/'child_removed') sobre el nodo
+// COMPLETO. Firebase, al conectar un listener así por primera vez,
+// reenvía TODOS los hijos existentes (dispara 'child_added' una vez
+// por cada producto/cliente ya guardado). Eso pasa de nuevo cada vez
+// que se recarga la página, se reabre la app, o el celular reconecta
+// después de perder señal — con ~30 vendedores abriendo la app varias
+// veces al día, esto era el mayor consumo de datos de toda la app y
+// el principal responsable de acercarse al límite de 10GB/mes de
+// descarga del plan gratis de Firebase (Spark).
+//
+// La solución: cada producto/cliente ahora guarda un campo
+// "updatedAt" (ver saveProduct/addStock/decrementStock/saveClient más
+// abajo). En vez de re-pedir TODO el nodo cada vez, se guarda en
+// localStorage el resultado de la última sincronización y, la
+// siguiente vez, se pide solo lo que cambió desde entonces
+// (orderByChild('updatedAt').startAt(ultimaSync)) — una consulta
+// mucho más chica en la enorme mayoría de los casos.
+//
+// Limitación aceptada a cambio de ese ahorro: un producto/cliente
+// BORRADO no se detecta con esa consulta incremental (ya no tiene
+// updatedAt para matchear un rango — simplemente desaparece del
+// nodo). Por eso cada tanto (FULL_RESYNC_INTERVAL_MS) se paga el
+// costo completo una vez, para reconciliar borrados y cualquier
+// desajuste. Si se necesita que un borrado se vea al instante en
+// todos los dispositivos, hay que forzar un refresco completo desde
+// ahí (recargar la app cuando ya tocó la resincronización, o subir
+// el intervalo).
+const FULL_RESYNC_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 horas
 
-// Tiempo real solo en Stock y Nueva Nota — donde el usuario
-// necesita ver cambios al instante (otro vendedor edita stock).
-// Antes: .on('value') reenvía el NODO COMPLETO cada vez que cualquier
-// producto cambia, a cada usuario conectado — con 30 usuarios y
-// cambios frecuentes de stock, esto era el mayor consumidor de datos
-// de toda la app (más que la navegación entre páginas).
-//
-// Se intentó separar la carga inicial (.once) de los cambios
-// posteriores (.on('child_added'/'child_changed'/'child_removed')),
-// pero eso causaba un bug de lag: child_added se dispara UNA VEZ POR
-// CADA producto que ya existe apenas se conecta el listener — con
-// 196 productos, eso son 196 repintados de golpe justo al cargar.
-//
-// Ahora se agrupan (debounce) todas las actualizaciones que lleguen
-// en una ventana de 50ms en una sola actualización de la lista — así
-// los 196 eventos iniciales terminan en 1 solo repintado, y un
-// cambio real y aislado (alguien vendió un producto) se sigue
-// viendo casi al instante (50ms es imperceptible).
-function watchProducts(callback) {
-  const productsMap = new Map();
+function readLocalCache(key) {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.items !== 'object') return null;
+    return parsed;
+  } catch (err) {
+    return null; // localStorage corrupto, deshabilitado (modo privado) o inexistente: se sigue sin caché
+  }
+}
+
+function writeLocalCache(key, cache) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(key, JSON.stringify(cache));
+  } catch (err) {
+    // Cuota de localStorage llena u otro error: la app sigue
+    // funcionando igual, solo sin el ahorro de datos del caché.
+  }
+}
+
+// Arma un watcher con caché+delta genérico para una colección plana
+// (products o clients), reutilizado por watchProducts/watchClients.
+// idField: nombre de la clave del hijo dentro de cada objeto emitido
+// (ej. 'code' para productos, 'ruc' para clientes).
+function watchCollectionWithCache(ref, cacheKey, idField, callback, onError) {
+  const itemsMap = new Map();
   let emitTimer = null;
   const scheduleEmit = () => {
     if (emitTimer) return;
     emitTimer = setTimeout(() => {
       emitTimer = null;
-      callback(Array.from(productsMap.values()));
+      callback(Array.from(itemsMap.values()));
     }, 50);
   };
 
+  const cache = readLocalCache(cacheKey);
+  const now = Date.now();
+  const needsFullResync = !cache || !cache.lastFullSync || (now - cache.lastFullSync) > FULL_RESYNC_INTERVAL_MS;
+  const lastFullSyncToKeep = (cache && !needsFullResync) ? cache.lastFullSync : now;
+
+  // 1) Pintar de inmediato con lo último guardado localmente, sin
+  // esperar ninguna respuesta de red — así la pantalla no queda en
+  // blanco mientras se resuelve la sincronización de abajo.
+  if (cache && cache.items) {
+    Object.keys(cache.items).forEach(key => itemsMap.set(key, cache.items[key]));
+    scheduleEmit();
+  }
+
+  function persist(lastSyncTs, lastFullSyncTs) {
+    const items = {};
+    itemsMap.forEach((v, k) => { items[k] = v; });
+    writeLocalCache(cacheKey, { items, lastSync: lastSyncTs, lastFullSync: lastFullSyncTs });
+  }
+
+  function applySnapshotAndPersist(snap, lastSyncTs, lastFullSyncTs) {
+    snap.forEach(child => {
+      const val = child.val();
+      const item = { ...val };
+      item[idField] = child.key;
+      itemsMap.set(child.key, item);
+    });
+    scheduleEmit();
+    persist(lastSyncTs, lastFullSyncTs);
+  }
+
+  const query = needsFullResync ? ref : ref.orderByChild('updatedAt').startAt(cache.lastSync + 1);
+  if (needsFullResync) itemsMap.clear(); // resincronización completa: se descarta el caché viejo por si acaso quedó un borrado sin reflejar
+
+  query.once('value').then(snap => {
+    applySnapshotAndPersist(snap, now, lastFullSyncToKeep);
+
+    // 2) De ahora en más, cualquier alta o cambio (de este dispositivo
+    // o de cualquier otro) llega en tiempo real, pero SOLO a partir de
+    // este instante — con esto se evita volver a recibir (y bajar) el
+    // catálogo entero como haría un .on('child_added') sin filtro.
+    const liveQuery = ref.orderByChild('updatedAt').startAt(now);
+    liveQuery.on('child_added', s => {
+      const item = { ...s.val() }; item[idField] = s.key;
+      itemsMap.set(s.key, item);
+      scheduleEmit();
+      persist(Date.now(), lastFullSyncToKeep);
+    }, onError);
+    liveQuery.on('child_changed', s => {
+      const item = { ...s.val() }; item[idField] = s.key;
+      itemsMap.set(s.key, item);
+      scheduleEmit();
+      persist(Date.now(), lastFullSyncToKeep);
+    }, onError);
+
+    watchCollectionWithCache._activeQueries.push(liveQuery);
+  }).catch(onError);
+}
+watchCollectionWithCache._activeQueries = [];
+
+// =========================================================
+// PRODUCTOS
+// =========================================================
+
+// Tiempo real solo en Stock y Nueva Nota — donde el usuario necesita
+// ver cambios al instante (otro vendedor edita stock). Carga inicial
+// con caché+delta y eventos incrementales en tiempo real desde ahí en
+// adelante — ver el bloque "CACHÉ LOCAL + SINCRONIZACIÓN INCREMENTAL"
+// más arriba para el detalle completo de por qué y cómo.
+function watchProducts(callback) {
   const onError = err => {
     console.error('[Firebase] Error leyendo /products:', err);
     alert('No se pudo cargar el stock (permiso denegado o sin conexión). Revisa la consola para más detalle.');
   };
-
-  refProducts.on('child_added', snap => {
-    productsMap.set(snap.key, { code: snap.key, ...snap.val() });
-    scheduleEmit();
-  }, onError);
-  refProducts.on('child_changed', snap => {
-    productsMap.set(snap.key, { code: snap.key, ...snap.val() });
-    scheduleEmit();
-  }, onError);
-  refProducts.on('child_removed', snap => {
-    productsMap.delete(snap.key);
-    scheduleEmit();
-  }, onError);
+  watchCollectionWithCache(refProducts, 'mf_cache_products_v1', 'code', callback, onError);
 }
 
 // Antes: "Guardar cambios" en el modal de Editar producto hacía un
@@ -168,7 +264,12 @@ function watchProducts(callback) {
 // seguridad. Si cambió mientras tanto (alguien vendió o ajustó el
 // producto), se cancela y se avisa, en vez de pisarlo en silencio.
 function saveProduct(code, data, expectedStock, isNew) {
-  const { stock, ...rest } = data;
+  const { stock, ...restRaw } = data;
+  // "updatedAt" es lo que permite a watchProducts (ver bloque de
+  // caché arriba) pedir solo lo que cambió desde la última vez, en
+  // vez de bajar el catálogo entero cada vez que se abre la app.
+  // Va en TODA escritura de producto, incluso si "rest" venía vacío.
+  const rest = { ...restRaw, updatedAt: firebase.database.ServerValue.TIMESTAMP };
   const productRef = refProducts.child(code);
 
   if (stock === undefined) {
@@ -251,7 +352,7 @@ function renameProductCode(oldCode, newCode) {
     }
     const updates = {};
     updates[oldCode] = null;
-    updates[newCode] = data;
+    updates[newCode] = { ...data, updatedAt: firebase.database.ServerValue.TIMESTAMP };
     return refProducts.update(updates);
   });
 }
@@ -285,7 +386,14 @@ function deleteProduct(code) {
 // que estén pasando al mismo tiempo, cada suma se aplica sobre el
 // valor real más reciente del servidor.
 function addStock(code, qty) {
-  return refProducts.child(code).child('stock').transaction(current => (current || 0) + qty);
+  const productRef = refProducts.child(code);
+  const stockUpdate = productRef.child('stock').transaction(current => (current || 0) + qty);
+  // "updatedAt" se actualiza en paralelo (no dentro de la misma
+  // transacción, que solo puede tocar /products/{code}/stock) para
+  // que la sincronización incremental de watchProducts detecte este
+  // cambio en la próxima carga sin tener que rebajar todo /products.
+  const touch = productRef.update({ updatedAt: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
+  return stockUpdate.then(result => touch.then(() => result));
 }
 
 async function decrementStock(items) {
@@ -296,6 +404,12 @@ async function decrementStock(items) {
       if (currentStock < item.qty) return; // aborta: no hay suficiente
       return currentStock - item.qty;
     });
+    if (result.committed) {
+      // Igual que en addStock: bump de updatedAt en paralelo, fuera de
+      // la transacción, para que la venta se refleje en la próxima
+      // sincronización incremental de watchProducts.
+      refProducts.child(item.code).update({ updatedAt: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
+    }
     return { code: item.code, qty: item.qty, ok: result.committed };
   }));
 
@@ -315,6 +429,7 @@ async function decrementStock(items) {
     // había descontado, para que la operación sea todo-o-nada.
     await Promise.all(succeeded.map(r =>
       refProducts.child(r.code).child('stock').transaction(current => (current || 0) + r.qty)
+        .then(() => refProducts.child(r.code).update({ updatedAt: firebase.database.ServerValue.TIMESTAMP }).catch(() => {}))
     )).catch(() => {});
 
     const err = new Error(
@@ -331,41 +446,15 @@ async function decrementStock(items) {
 // CLIENTES
 // =========================================================
 
-// Tiempo real en Pedidos — la lista de clientes debe estar
-// siempre actualizada mientras el usuario trabaja.
-// Mismo principio que watchProducts: carga inicial única + eventos
-// por cliente individual en vez de reenviar toda la lista cada vez
-// que alguien agrega/edita un cliente.
-// Mismo principio que watchProducts (ver comentario ahí arriba,
-// incluye el arreglo del bug de lag por reproducción inicial).
+// Tiempo real en Pedidos — la lista de clientes debe estar siempre
+// actualizada mientras el usuario trabaja. Mismo mecanismo de
+// caché+delta que watchProducts (ver el bloque de arriba).
 function watchClients(callback) {
-  const clientsMap = new Map();
-  let emitTimer = null;
-  const scheduleEmit = () => {
-    if (emitTimer) return;
-    emitTimer = setTimeout(() => {
-      emitTimer = null;
-      callback(Array.from(clientsMap.values()));
-    }, 50);
-  };
-
   const onError = err => {
     console.error('[Firebase] Error leyendo /clients:', err);
     alert('No se pudo cargar la lista de clientes (permiso denegado o sin conexión). Revisa la consola para más detalle.');
   };
-
-  refClients.on('child_added', snap => {
-    clientsMap.set(snap.key, { ruc: snap.key, ...snap.val() });
-    scheduleEmit();
-  }, onError);
-  refClients.on('child_changed', snap => {
-    clientsMap.set(snap.key, { ruc: snap.key, ...snap.val() });
-    scheduleEmit();
-  }, onError);
-  refClients.on('child_removed', snap => {
-    clientsMap.delete(snap.key);
-    scheduleEmit();
-  }, onError);
+  watchCollectionWithCache(refClients, 'mf_cache_clients_v1', 'ruc', callback, onError);
 }
 
 // ── Apagar listeners en tiempo real antes de cerrar sesión ──────
@@ -384,10 +473,17 @@ function stopRealtimeWatchers() {
   refProducts.off();
   refClients.off();
   refOrders.off();
+  // Las queries incrementales de watchProducts/watchClients
+  // (orderByChild('updatedAt').startAt(...)) son objetos de query
+  // aparte del ref plano de arriba — un .off() en el ref plano no las
+  // desconecta a ellas. Se guardan todas en _activeQueries apenas se
+  // crean, así que se apagan una por una acá.
+  watchCollectionWithCache._activeQueries.forEach(q => q.off());
+  watchCollectionWithCache._activeQueries.length = 0;
 }
 
 function saveClient(ruc, data) {
-  return refClients.child(ruc).set(data);
+  return refClients.child(ruc).set({ ...data, updatedAt: firebase.database.ServerValue.TIMESTAMP });
 }
 
 function deleteClient(ruc) {
