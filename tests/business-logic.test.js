@@ -45,14 +45,24 @@ test('normalizeProductCode: un espacio antes de un guion no debe duplicarlo ("10
   assert.equal(window.normalizeProductCode('101  -   4L'), '101-4L');
 });
 
-test('normalizeProductCode: recorta guiones/símbolos que quedan colgando al FINAL (ej. columnas de ancho fijo en Excel), sin tocar el inicio', () => {
+test('normalizeProductCode: preserva un guion, comilla o barra de fracción que queda al FINAL (son parte real del código), sin tocar el inicio', () => {
   const { window } = loadApp(['import-stock.js', 'stock.js']);
-  // "B-3K-" con relleno de espacios (columna de ancho fijo en Excel) → el guion final no es parte del código real
-  assert.equal(window.normalizeProductCode('B-3K-                    '), 'B-3K');
-  // El guion del MEDIO del código no se toca, solo el que queda pegado al final
+  // Un guion que queda pegado al final ahora SÍ se conserva (antes se
+  // recortaba asumiendo que siempre venía de relleno de Excel, pero
+  // ya no hay forma de distinguirlo de un guion real escrito a mano)
+  assert.equal(window.normalizeProductCode('B-3K-                    '), 'B-3K-');
+  // El guion del MEDIO del código nunca se tocó, sigue igual
   assert.equal(window.normalizeProductCode('FV-BOW-1/2               '), 'FV-BOW-1⁄2');
   // Un código ya limpio no debe verse afectado
   assert.equal(window.normalizeProductCode('CKCL002'), 'CKCL002');
+});
+
+test('normalizeProductCode: si el mismo símbolo queda repetido al final (comilla, barra de fracción o guion), se deja solo uno', () => {
+  const { window } = loadApp(['import-stock.js', 'stock.js']);
+  assert.equal(window.normalizeProductCode('14""'), '14"');
+  assert.equal(window.normalizeProductCode('TOM-14"""'), 'TOM-14"');
+  assert.equal(window.normalizeProductCode('FV-BOW-1/2//'), 'FV-BOW-1⁄2⁄');
+  assert.equal(window.normalizeProductCode('FV-BOW-1/2--'), 'FV-BOW-1⁄2-');
 });
 
 test('decrementStock: si UN producto no alcanza, no debe quedar stock "fantasma" descontado en los demás', async () => {

@@ -23,8 +23,26 @@ function normalizeProductCode(raw) {
   // guion. Se recorta cualquier racha de guiones/caracteres no
   // alfanuméricos que quede pegada al FINAL. El resto del código
   // (incluido el inicio) queda intacto: solo se toca la punta final.
-  var trimmedEnd = code.replace(/[^A-Z0-9]+$/, '');
+  // Se exceptúan la comilla doble " (marca de pulgadas, ej. tambor
+  // "14"") y la barra de fracción ⁄ (ej. violín "4⁄4"): ambas SÍ son
+  // válidas como clave de Firebase y son parte real del código —
+  // igual que la barra "/" ya se preserva (como ⁄) en vez de
+  // recortarse, la comilla no debe perderse solo por caer al final.
+  // El guion "-" también se preserva ahora si queda UNO solo al
+  // final (ej. "FV-BOW-1/2-"): antes se recortaba pensando que
+  // siempre era un artefacto de Excel con columnas de ancho fijo,
+  // pero un guion colgando también puede ser parte real de un
+  // código escrito a mano — y ya no hay forma de distinguir ambos
+  // casos una vez reducidos a un solo guion. Lo que SÍ se sigue
+  // recortando del final es cualquier otro símbolo (espacios ya
+  // convertidos en guion, etc.) que no sea uno de estos tres.
+  var trimmedEnd = code.replace(/[^A-Z0-9"⁄-]+$/, '');
   if (trimmedEnd) code = trimmedEnd; // si quedara vacío (código de puros símbolos), se deja como estaba
+  // Si al final quedan 2 (o más) del mismo símbolo pegados —típico
+  // de escribir sin querer 14"" en vez de 14", o "--" en vez de "-"—
+  // se deja solo uno. Un código nunca necesita el mismo símbolo
+  // repetido al final para tener sentido.
+  code = code.replace(/(["⁄-])\1+$/, '$1');
   return code;
 }
 
@@ -67,7 +85,11 @@ function getFilteredProducts() {
   const q = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
   if (!q) return productsCache;
   return productsCache.filter(p => {
-    const search = `${p.code || ''} ${p.name || ''} ${p.category || ''}`.toLowerCase();
+    // displayProductCode() vuelve a convertir "⁄" en "/" antes de
+    // comparar: si no, buscar "1/2" nunca encontraría un producto
+    // guardado internamente como "1⁄2" (el usuario nunca escribe
+    // "⁄", solo ve y escribe "/").
+    const search = `${displayProductCode(p.code || '')} ${p.name || ''} ${p.category || ''}`.toLowerCase();
     return search.includes(q);
   });
 }

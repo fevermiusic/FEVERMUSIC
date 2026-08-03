@@ -20,6 +20,7 @@ let editingOrderId      = null;
 let editingOriginalItems = null;
 let editingOriginalMeta  = null; // { fecha, hora } — se conservan al editar
 let editingOriginalEditCount = 0; // cuántas veces se editó esta nota antes de este guardado
+let editingOriginalCreadoPor = null; // { uid, nombre } de quien CREÓ la nota — se conserva al editar
 
 // Catálogo — antes esta vista mantenía su PROPIA copia (PRODUCTS)
 // con su propio watchProducts(), duplicando la misma conexión que
@@ -59,6 +60,12 @@ window.NuevaNota = {
       editingOriginalItems = (params.editItems || []).map(i => ({ code: i.code, qty: i.qty }));
       editingOriginalMeta  = { fecha: params.editFecha || '', hora: params.editHora || '' };
       editingOriginalEditCount = params.editCount || 0;
+      // Sin esto, guardar una edición (venga de admin o del propio
+      // vendedor) reasignaba la nota a quien la está editando AHORA
+      // en vez de conservar a quien la vendió originalmente — el
+      // dueño real de la venta desaparecía de su propio Historial y
+      // el filtro por vendedor quedaba mal categorizado.
+      editingOriginalCreadoPor = params.editCreadoPor || null;
 
       // maxStock = stock real actual del producto + la cantidad que
       // ya tenía esta nota (porque esa cantidad se le devuelve al
@@ -88,6 +95,7 @@ window.NuevaNota = {
       editingOriginalItems = null;
       editingOriginalMeta  = null;
       editingOriginalEditCount = 0;
+      editingOriginalCreadoPor = null;
 
       items       = [];
       discountPct = 0;
@@ -170,7 +178,11 @@ function onProductSearchInput() {
   toggleProductSearchClear(rawValue.length > 0);
 
   currentSuggestions = productsCache.filter(p => {
-    const code = (p.code || '').toLowerCase();
+    // Mismo motivo que en getFilteredProducts() de stock.js: se
+    // compara contra la versión mostrada ("/") no la interna ("⁄"),
+    // si no, buscar "1/2" nunca encontraría el producto guardado
+    // como "1⁄2".
+    const code = displayProductCode(p.code || '').toLowerCase();
     const name = (p.name || '').toLowerCase();
     return !q || name.includes(q) || code.includes(q);
   });

@@ -520,7 +520,7 @@ function renderConflictStep() {
       detailHtml += '<div class="import-update-detail"><strong>Se actualizarán:</strong><ul class="import-update-list">'
         + willUpdateRows.map(function(r) {
             var existingName = (r.existing && r.existing.name) || r.name || '';
-            return '<li><span class="mono">' + escapeHtml(r.code) + '</span>'
+            return '<li><span class="mono">' + escapeHtml(displayProductCode(r.code)) + '</span>'
               + (existingName ? ' — ' + escapeHtml(existingName) : '')
               + '</li>';
           }).join('')
@@ -528,7 +528,7 @@ function renderConflictStep() {
     }
     if (willSkipRows.length > 0) {
       detailHtml += '<div class="import-update-detail"><strong>No encontrados (se omiten):</strong><ul class="import-update-list">'
-        + willSkipRows.map(function(r) { return '<li><span class="mono">' + escapeHtml(r.code) + '</span></li>'; }).join('')
+        + willSkipRows.map(function(r) { return '<li><span class="mono">' + escapeHtml(displayProductCode(r.code)) + '</span></li>'; }).join('')
         + '</ul></div>';
     }
     detailHtml += buildExcludedRowsHtml();

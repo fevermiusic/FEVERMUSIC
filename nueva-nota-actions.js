@@ -107,7 +107,13 @@ function confirmOrder() {
     // es lo que le permite al admin rastrear una nota hasta la
     // persona exacta que la creó o la editó (antes era imposible:
     // todos los vendedores compartían una sola cuenta).
-    creadoPor:    { uid: currentUserUid, nombre: currentUserName }
+    // Al EDITAR se conserva quien la creó originalmente (aunque la
+    // esté editando otra persona, típicamente el admin) — si no, la
+    // nota se le "robaba" al vendedor que la vendió: desaparecía de
+    // su Historial y quedaba mal categorizada en el filtro por
+    // vendedor, solo por haber sido corregida por alguien más.
+    creadoPor:    isEdit ? (editingOriginalCreadoPor || { uid: currentUserUid, nombre: currentUserName })
+                          : { uid: currentUserUid, nombre: currentUserName }
   };
 
   if (isEdit) {

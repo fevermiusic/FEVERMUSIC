@@ -99,9 +99,12 @@
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--text-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Antes: white-space:nowrap + text-overflow:ellipsis cortaba
+     códigos largos con "…" (ej. "FV-2010C-4EQ-…"), sin forma de ver
+     el código completo salvo pasando el mouse. Ahora se deja hacer
+     salto de línea normal, igual que .pt-name/.pt-desc: el código
+     siempre se ve entero, aunque ocupe dos líneas dentro de la celda. */
+  overflow-wrap: break-word;
 }
 .pt-name {
   font-size: 13px;
@@ -220,7 +223,11 @@
   color: var(--text-1);
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  white-space: nowrap;
+  /* Mismo motivo que .pt-code en la tabla: con nowrap, un código
+     largo quedaba recortado en silencio por el overflow:hidden de
+     .product-card (sin ni siquiera un "…" que avisara). Se deja
+     hacer salto de línea para que siempre se vea completo. */
+  overflow-wrap: break-word;
 }
 .pc-name {
   font-size: 13px;

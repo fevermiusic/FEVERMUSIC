@@ -178,7 +178,8 @@ function editNota() {
     editHora:     o.hora,
     editItems:    (o.items || []).map(i => ({ code: i.code, name: i.name, desc: i.desc || '', price: i.price, qty: i.qty, itemDiscountPct: i.itemDiscountPct || 0 })),
     editDiscount: o.descuentoPct || 0,
-    editCount:    o.editCount || 0
+    editCount:    o.editCount || 0,
+    editCreadoPor: o.creadoPor || null
   };
   if (window.Router) {
     Router.go('nueva-nota', { params });
