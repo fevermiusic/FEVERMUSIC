@@ -248,7 +248,19 @@ function watchCollectionWithCache(ref, cacheKey, idField, callback, onError) {
     const liveQuery = ref.orderByChild('updatedAt').startAt(now);
     liveQuery.on('child_added', s => {
       const val = s.val();
-      if (val && val.deleted) return; // por si acaso llega ya marcado como eliminado
+      if (val && val.deleted) {
+        // Puede pasar con un producto que YA existía antes de abrir
+        // esta pantalla (su updatedAt viejo quedaba fuera del rango
+        // que vigila este listener) y se borra lógicamente recién
+        // ahora: al entrar su updatedAt nuevo en rango, Firebase lo
+        // avisa como 'child_added' (primera vez que matchea la
+        // query), no como 'child_changed'. Si no se sacara acá
+        // también, quedaría visible para siempre en esta pantalla.
+        itemsMap.delete(s.key);
+        scheduleEmit();
+        persist(Date.now(), lastFullSyncSoFar);
+        return;
+      }
       const item = { ...val }; item[idField] = s.key;
       itemsMap.set(s.key, item);
       scheduleEmit();
@@ -357,8 +369,16 @@ function saveProduct(code, data, expectedStock, isNew) {
     // transacción solo confirma la escritura si el nodo sigue
     // vacío en el servidor en ese instante; si no, se cancela y
     // se avisa en vez de pisar el producto ya creado.
+    //
+    // Excepción: si el nodo existe pero está marcado deleted:true
+    // (borrado lógico, ver deleteProduct), NO cuenta como "ya
+    // existe" — se permite la escritura y listo, porque para el
+    // usuario ese código simplemente no está en uso. Sin este
+    // caso, recrear un código que se había borrado (ej. reimportar
+    // el Excel completo después de "Eliminar todo") fallaba
+    // siempre, porque el nodo viejo seguía ahí aunque oculto.
     return productRef.transaction(current => {
-      if (current !== null) return; // aborta: el código ya existe
+      if (current !== null && !current.deleted) return; // aborta: el código ya existe y sigue activo
       return { ...rest, stock };
     }).then(result => {
       if (!result.committed) {
@@ -405,7 +425,7 @@ function saveProduct(code, data, expectedStock, isNew) {
 function renameProductCode(oldCode, newCode) {
   const newRef = refProducts.child(newCode);
   return newRef.transaction(current => {
-    if (current !== null) return; // aborta: ya existe un producto con el código nuevo
+    if (current !== null && !current.deleted) return; // aborta: ya existe un producto activo con el código nuevo
     return true; // valor temporal, se reemplaza por los datos reales abajo
   }).then(result => {
     if (!result.committed) {

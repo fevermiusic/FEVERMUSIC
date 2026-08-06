@@ -157,6 +157,33 @@ test('refreshProductsNow(): un borrado se refleja al instante (no hace falta esp
   assert.ok(list.some(p => p.code === 'GTR-001'));
 });
 
+test('watchProducts: un borrado lógico (deleteProduct) SÍ se refleja al instante en otro dispositivo, sin esperar las 3 horas', async () => {
+  const { window, firebase } = setup();
+  firebase._store.products = {
+    'GTR-001': { name: 'Guitarra', stock: 10, price: 100, updatedAt: 1000 },
+    'AMP-002': { name: 'Amplificador', stock: 5, price: 300, updatedAt: 1000 },
+  };
+
+  // "Dispositivo A": abre Stock y deja el listener en tiempo real activo.
+  let listA = null;
+  window.watchProducts(l => { listA = l; });
+  await waitTick();
+  assert.ok(listA.some(p => p.code === 'AMP-002'));
+
+  // "Dispositivo B" (o el mismo, da igual): borra AMP-002 usando
+  // deleteProduct(), como hace el botón "Eliminar" de Stock — esto
+  // NO borra el nodo, lo marca deleted:true + updatedAt actual.
+  await window.deleteProduct('AMP-002');
+
+  // El listener en tiempo real de "Dispositivo A" debe recibirlo como
+  // un child_changed normal (mismo canal que un cambio de precio), y
+  // sacarlo de la lista al instante — sin llamar a refreshProductsNow()
+  // ni esperar la resincronización de 3 horas.
+  await waitTick();
+  assert.ok(!listA.some(p => p.code === 'AMP-002'), 'el borrado lógico debe reflejarse en tiempo real, sin esperar 3 horas');
+  assert.ok(listA.some(p => p.code === 'GTR-001'), 'el producto que sigue existiendo no se ve afectado');
+});
+
 test('watchClients: mismo mecanismo de caché+delta que watchProducts', async () => {
   const { window, firebase } = setup();
   firebase._store.clients = {

@@ -138,11 +138,29 @@ test('saveProduct con isNew=true: el mensaje de error explica qué pasó', async
   assert.equal(firebase._store.products['GTR-006'].name, 'Ya existente', 'no debe haberse tocado el producto existente');
 });
 
-test('deleteProduct: elimina el producto del árbol de productos', async () => {
+test('deleteProduct: borrado lógico — marca deleted:true y stock:0, no elimina el nodo', async () => {
   const { window, firebase } = setup();
   firebase._store.products = { 'GTR-001': { name: 'Guitarra', stock: 1 } };
   await window.deleteProduct('GTR-001');
-  assert.equal(firebase._store.products['GTR-001'], undefined);
+  // El nodo sigue existiendo (para que el borrado viaje por el canal
+  // de 'child_changed' en tiempo real y se vea al instante en otros
+  // dispositivos, en vez de depender de la resincronización de 3h),
+  // pero queda marcado como eliminado y sin stock.
+  assert.equal(firebase._store.products['GTR-001'].deleted, true);
+  assert.equal(firebase._store.products['GTR-001'].stock, 0);
+  assert.equal(firebase._store.products['GTR-001'].name, 'Guitarra', 'el nombre no se pierde, solo se marca eliminado');
+});
+
+test('saveProduct con isNew=true sobre un producto borrado lógicamente: revive el código en vez de rechazarlo', async () => {
+  const { window, firebase } = setup();
+  firebase._store.products = { 'GTR-001': { name: 'Guitarra vieja', stock: 0, deleted: true } };
+
+  await window.saveProduct('GTR-001', { name: 'Guitarra nueva', desc: '', price: 100, stock: 5, category: 'general' }, undefined, true);
+
+  const p = firebase._store.products['GTR-001'];
+  assert.equal(p.name, 'Guitarra nueva');
+  assert.equal(p.stock, 5);
+  assert.equal(p.deleted, undefined, 'la marca de eliminado debe desaparecer al revivir el código');
 });
 
 test('saveOrder + generateNextOrderNumber: los números de nota son correlativos, no aleatorios', async () => {
