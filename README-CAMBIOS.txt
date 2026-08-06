@@ -56,6 +56,22 @@ Resto de cambios de esta sesión (ya incluidos):
    - renderProducts() ya no truena si la tabla de escritorio
      (#productTableBody) no existe en el DOM (ej. vista móvil).
 
+9. firebase.js
+   - deleteProduct() ahora borra el nodo de Firebase DE VERDAD
+     (.remove()), en vez de solo marcarlo deleted:true + stock:0 y
+     dejarlo escondido. Antes de este cambio, un producto "eliminado"
+     seguía existiendo en la base de datos y se veía en la consola de
+     Firebase, aunque la app lo ocultara.
+   - Para que esto no perdiera el aviso en tiempo real a otros
+     dispositivos (razón original del borrado lógico), se agregó un
+     listener 'child_removed' sobre /products y /clients completos:
+     cuando alguien borra un producto de verdad, cualquier pantalla
+     abierta (Stock, Nueva Nota) lo saca de la lista al instante, sin
+     esperar la resincronización de cada 3 horas.
+   - IMPORTANTE: los productos que ya habías "eliminado" ANTES de este
+     fix siguen en Firebase como fantasmas (deleted:true, stock:0) —
+     ver LIMPIAR-FANTASMAS-LEEME.txt para borrarlos de una sola vez.
+
 Cómo probarlo
 =============
 1. Descomprime reemplazando tu carpeta musical-fever-spa actual.

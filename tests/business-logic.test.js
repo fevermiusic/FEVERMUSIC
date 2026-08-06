@@ -138,17 +138,15 @@ test('saveProduct con isNew=true: el mensaje de error explica qué pasó', async
   assert.equal(firebase._store.products['GTR-006'].name, 'Ya existente', 'no debe haberse tocado el producto existente');
 });
 
-test('deleteProduct: borrado lógico — marca deleted:true y stock:0, no elimina el nodo', async () => {
+test('deleteProduct: borrado físico real — el nodo desaparece por completo de /products', async () => {
   const { window, firebase } = setup();
   firebase._store.products = { 'GTR-001': { name: 'Guitarra', stock: 1 } };
   await window.deleteProduct('GTR-001');
-  // El nodo sigue existiendo (para que el borrado viaje por el canal
-  // de 'child_changed' en tiempo real y se vea al instante en otros
-  // dispositivos, en vez de depender de la resincronización de 3h),
-  // pero queda marcado como eliminado y sin stock.
-  assert.equal(firebase._store.products['GTR-001'].deleted, true);
-  assert.equal(firebase._store.products['GTR-001'].stock, 0);
-  assert.equal(firebase._store.products['GTR-001'].name, 'Guitarra', 'el nombre no se pierde, solo se marca eliminado');
+  // El nodo ya no existe en absoluto (no queda "fantasma" con
+  // deleted:true en la base real). El borrado sigue viajando en
+  // tiempo real a otras pantallas/dispositivos gracias al listener
+  // 'child_removed' agregado en watchCollectionWithCache.
+  assert.equal(firebase._store.products['GTR-001'], undefined);
 });
 
 test('saveProduct con isNew=true sobre un producto borrado lógicamente: revive el código en vez de rechazarlo', async () => {

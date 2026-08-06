@@ -1,0 +1,39 @@
+LIMPIAR LOS PRODUCTOS "FANTASMA" QUE YA QUEDARON EN FIREBASE
+==============================================================
+
+Este paso es de UNA SOLA VEZ. Es para los productos que borraste ANTES
+de este fix (cuando "Eliminar" solo marcaba el producto como oculto en
+vez de borrarlo de verdad) — esos nodos siguen en tu Realtime Database
+con "deleted: true" y "stock: 0", aunque la app ya no los muestre.
+
+Después de subir este ZIP (con el fix), cualquier borrado NUEVO que
+hagas desde Stock sí borra el nodo de Firebase de verdad. Este paso
+solo es para limpiar lo viejo que quedó pendiente.
+
+CÓMO HACERLO (2 minutos, sin instalar nada)
+--------------------------------------------
+1. Abre tu app (fevermiusic.github.io/FEVERMUSIC) e inicia sesión con
+   la cuenta admin (fevermiusiclog@gmail.com).
+2. Con esa pestaña abierta, presiona F12 (o clic derecho → Inspeccionar)
+   y ve a la pestaña "Console".
+3. Pega este código y presiona Enter:
+
+firebase.database().ref('products').once('value').then(snap => {
+  const updates = {};
+  let count = 0;
+  snap.forEach(child => {
+    if (child.val() && child.val().deleted) {
+      updates[child.key] = null; // null en un update() = borra ese nodo
+      count++;
+    }
+  });
+  return firebase.database().ref('products').update(updates).then(() => count);
+}).then(count => console.log('Productos fantasma eliminados:', count));
+
+4. Debe imprimir algo como "Productos fantasma eliminados: 47".
+5. Recarga la app y revisa en la consola de Firebase (Realtime Database)
+   que esos códigos ya no aparecen para nada bajo /products.
+
+Este código solo funciona logueado como admin (las reglas de Firebase
+así lo exigen para /products) y solo toca los productos marcados
+deleted:true — no afecta ningún producto activo.

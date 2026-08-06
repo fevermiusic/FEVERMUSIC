@@ -154,7 +154,7 @@ test('refreshProductsNow(): un borrado se refleja al instante (no hace falta esp
   assert.ok(list.some(p => p.code === 'GTR-001'));
 });
 
-test('watchProducts: un borrado lógico (deleteProduct) SÍ se refleja al instante en otro dispositivo, sin esperar las 3 horas', async () => {
+test('watchProducts: un borrado físico (deleteProduct) SÍ se refleja al instante en otro dispositivo, sin esperar las 3 horas', async () => {
   const { window, firebase } = setup();
   firebase._store.products = {
     'GTR-001': { name: 'Guitarra', stock: 10, price: 100, updatedAt: 1000 },
@@ -169,15 +169,16 @@ test('watchProducts: un borrado lógico (deleteProduct) SÍ se refleja al instan
 
   // "Dispositivo B" (o el mismo, da igual): borra AMP-002 usando
   // deleteProduct(), como hace el botón "Eliminar" de Stock — esto
-  // NO borra el nodo, lo marca deleted:true + updatedAt actual.
+  // elimina el nodo de verdad (.remove()), no queda nada "fantasma"
+  // en Firebase.
   await window.deleteProduct('AMP-002');
 
-  // El listener en tiempo real de "Dispositivo A" debe recibirlo como
-  // un child_changed normal (mismo canal que un cambio de precio), y
-  // sacarlo de la lista al instante — sin llamar a refreshProductsNow()
-  // ni esperar la resincronización de 3 horas.
+  // El listener 'child_removed' de "Dispositivo A" (agregado sobre el
+  // nodo completo, sin depender de updatedAt) debe sacarlo de la
+  // lista al instante — sin llamar a refreshProductsNow() ni esperar
+  // la resincronización de 3 horas.
   await waitTick();
-  assert.ok(!listA.some(p => p.code === 'AMP-002'), 'el borrado lógico debe reflejarse en tiempo real, sin esperar 3 horas');
+  assert.ok(!listA.some(p => p.code === 'AMP-002'), 'el borrado físico debe reflejarse en tiempo real, sin esperar 3 horas');
   assert.ok(listA.some(p => p.code === 'GTR-001'), 'el producto que sigue existiendo no se ve afectado');
 });
 
