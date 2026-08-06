@@ -152,13 +152,39 @@ function confirmOrder() {
           'la eliminó mientras la editabas. Vuelve a Historial y créala de nuevo si aún corresponde.'
         );
       }
-      return Promise.all(editingOriginalItems.map(i => addStock(i.code, i.qty)))
+      const revertedCodes = new Set();
+      return Promise.all(editingOriginalItems.map(i =>
+          addStock(i.code, i.qty).then(
+            () => { revertedCodes.add(i.code); },
+            err => {
+              // Si el producto de la nota original ya no existe (fue
+              // eliminado de Stock después de esa venta, ej. un modelo
+              // descontinuado), no hay a qué producto devolverle el
+              // stock. Antes esto no pasaba nunca porque el borrado de
+              // productos era lógico (el nodo seguía ahí, aunque oculto);
+              // ahora que el borrado es físico de verdad, hay que
+              // tolerarlo: se avisa en consola y se sigue con el resto
+              // de la nota, en vez de bloquear toda la edición por un
+              // producto que ya no existe en el catálogo.
+              if (err && err.productDeleted) {
+                console.warn(`[Nueva Nota] No se devolvió stock a "${i.code}" al editar la nota: el producto ya no existe en Stock.`);
+                return;
+              }
+              throw err;
+            }
+          )
+        ))
         .then(() =>
           decrementStock(items.map(i => ({ code: i.code, qty: i.qty }))).catch(err => {
             // decrementStock ya falló y no aplicó nada (es transaccional),
             // pero el addStock de arriba SÍ se aplicó — hay que revertirlo
             // para no dejar el stock inflado con cantidades "fantasma".
-            return Promise.all(editingOriginalItems.map(i => addStockWithRetry(i.code, -i.qty)))
+            // Solo se revierten los códigos donde el addStock de arriba
+            // realmente se aplicó (revertedCodes) — no los que se
+            // saltaron por no existir el producto.
+            return Promise.all(editingOriginalItems
+                .filter(i => revertedCodes.has(i.code))
+                .map(i => addStockWithRetry(i.code, -i.qty)))
               .then(() => { throw err; });
           })
         )

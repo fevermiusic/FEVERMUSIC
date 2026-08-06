@@ -541,15 +541,32 @@ function deleteProduct(code) {
 // Excel al llegar un contenedor). Transacción segura: no pisa ventas
 // que estén pasando al mismo tiempo, cada suma se aplica sobre el
 // valor real más reciente del servidor.
+//
+// Antes de sumar, se confirma que el producto siga existiendo. Esto
+// importa desde que deleteProduct() borra el nodo de verdad (ver más
+// abajo): sin esta verificación, si alguien elimina un producto justo
+// en el instante entre que se detecta un error y se intenta esta
+// función (ej. reversión de una venta que falló a medias, ver
+// decrementStock/addStockWithRetry), la transacción sobre
+// "/stock" recrearía el nodo desde cero con SOLO stock y updatedAt —
+// un producto fantasma sin nombre ni precio. Con esta comprobación,
+// en ese caso se avisa con un error claro en vez de recrear algo roto.
 function addStock(code, qty) {
   const productRef = refProducts.child(code);
-  const stockUpdate = productRef.child('stock').transaction(current => (current || 0) + qty);
-  // "updatedAt" se actualiza en paralelo (no dentro de la misma
-  // transacción, que solo puede tocar /products/{code}/stock) para
-  // que la sincronización incremental de watchProducts detecte este
-  // cambio en la próxima carga sin tener que rebajar todo /products.
-  const touch = productRef.update({ updatedAt: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
-  return stockUpdate.then(result => touch.then(() => result));
+  return productRef.once('value').then(snap => {
+    if (!snap.exists()) {
+      const err = new Error(`El producto ${code} ya no existe (fue eliminado) — no se pudo sumar stock.`);
+      err.productDeleted = true;
+      throw err;
+    }
+    const stockUpdate = productRef.child('stock').transaction(current => (current || 0) + qty);
+    // "updatedAt" se actualiza en paralelo (no dentro de la misma
+    // transacción, que solo puede tocar /products/{code}/stock) para
+    // que la sincronización incremental de watchProducts detecte este
+    // cambio en la próxima carga sin tener que rebajar todo /products.
+    const touch = productRef.update({ updatedAt: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
+    return stockUpdate.then(result => touch.then(() => result));
+  });
 }
 
 // Suma qty a un producto reintentando varias veces antes de rendirse.
@@ -568,14 +585,30 @@ async function addStockWithRetry(code, qty, attempts) {
       return;
     } catch (err) {
       lastErr = err;
+      // Si el producto ya no existe (lo borraron justo en este
+      // instante), reintentar no va a cambiar nada — reintentar 3
+      // veces solo demoraría el aviso sin necesidad.
+      if (err && err.productDeleted) break;
       if (i < attempts - 1) await new Promise(r => setTimeout(r, 400 * (i + 1)));
     }
+  }
+  console.error(`[Firebase] No se pudo revertir stock de ${code} (+${qty}) tras ${attempts} intentos:`, lastErr);
+  if (lastErr && lastErr.productDeleted) {
+    // Se agotaron los reintentos porque el producto ya no existe: la
+    // instrucción de "sumale X manualmente" no aplica (no hay a qué
+    // producto sumarle), así que se avisa distinto — el ajuste real
+    // que hace falta es de otro tipo (revisar si esa venta debe
+    // anularse, o si el producto debe recrearse a mano).
+    alert(
+      `⚠ IMPORTANTE: la venta de "${code}" (${qty} unidad(es)) no se pudo revertir porque el producto ya no existe (fue eliminado). ` +
+      'Revisa el pedido en Historial y decide si corresponde anularlo.'
+    );
+    return;
   }
   // Se agotaron los reintentos: en vez de tragarse el error (como
   // antes), se avisa de forma imposible de ignorar — con el código y
   // la cantidad exactos para que se pueda corregir a mano en Stock
   // ahora mismo, en vez de que el inventario quede mal en silencio.
-  console.error(`[Firebase] No se pudo revertir stock de ${code} (+${qty}) tras ${attempts} intentos:`, lastErr);
   alert(
     `⚠ IMPORTANTE: no se pudo devolver ${qty} unidad(es) al stock de "${code}" tras un error. ` +
     `Anda a Stock AHORA y sumale ${qty} manualmente a ese código para que el inventario quede correcto.`
@@ -705,7 +738,18 @@ function getClient(ruc) {
 // refOrders.child(id).remove() en vez de pasar por esta función.
 function deleteOrder(orderId, items) {
   const restore = (items && items.length)
-    ? Promise.all(items.map(i => addStock(i.code, i.qty)))
+    ? Promise.all(items.map(i => addStock(i.code, i.qty).catch(err => {
+        // Si el producto de esta nota ya no existe en Stock (se
+        // eliminó después de la venta), no hay a qué producto
+        // devolverle el stock. Se avisa en consola y se sigue —
+        // NUNCA debe bloquear el borrado de la nota en sí, que es
+        // lo que el usuario realmente pidió acá.
+        if (err && err.productDeleted) {
+          console.warn(`[Historial] No se devolvió stock a "${i.code}" al eliminar la nota: el producto ya no existe en Stock.`);
+          return;
+        }
+        throw err;
+      })))
     : Promise.resolve();
   return restore.then(() => refOrders.child(orderId).remove());
 }

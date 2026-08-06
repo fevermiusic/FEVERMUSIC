@@ -24,6 +24,18 @@ test('addStock: suma al stock existente de forma atómica', async () => {
   assert.equal(firebase._store.products['GTR-001'].stock, 15);
 });
 
+test('addStock: si el producto ya no existe, rechaza en vez de recrearlo desde cero (fantasma sin nombre)', async () => {
+  const { window, firebase } = setup();
+  firebase._store.products = {};
+
+  await assert.rejects(
+    () => window.addStock('GTR-001', 5),
+    /ya no existe/i
+  );
+  // No debe haber recreado el nodo con solo stock/updatedAt.
+  assert.equal(firebase._store.products['GTR-001'], undefined);
+});
+
 test('decrementStock: descuenta stock cuando alcanza para todos los productos del pedido', async () => {
   const { window, firebase } = setup();
   firebase._store.products = {
@@ -147,6 +159,31 @@ test('deleteProduct: borrado físico real — el nodo desaparece por completo de
   // tiempo real a otras pantallas/dispositivos gracias al listener
   // 'child_removed' agregado en watchCollectionWithCache.
   assert.equal(firebase._store.products['GTR-001'], undefined);
+});
+
+test('deleteOrder: al elegir "restore", devuelve el stock de cada producto de la nota', async () => {
+  const { window, firebase } = setup();
+  firebase._store.products = { 'GTR-001': { name: 'Guitarra', stock: 5 } };
+  firebase._store.orders = { 'order1': { numero: '001', items: [{ code: 'GTR-001', qty: 2 }] } };
+
+  await window.deleteOrder('order1', [{ code: 'GTR-001', qty: 2 }]);
+
+  assert.equal(firebase._store.products['GTR-001'].stock, 7, 'debe devolver la cantidad vendida al stock');
+  assert.equal(firebase._store.orders['order1'], undefined, 'la nota debe quedar eliminada');
+});
+
+test('deleteOrder: si un producto de la nota ya no existe en Stock, igual borra la nota (no bloquea todo por un producto descontinuado)', async () => {
+  const { window, firebase } = setup();
+  // GTR-001 se vendió y luego fue eliminado del catálogo — ya no existe.
+  firebase._store.products = {};
+  firebase._store.orders = { 'order1': { numero: '001', items: [{ code: 'GTR-001', qty: 2 }] } };
+
+  await window.deleteOrder('order1', [{ code: 'GTR-001', qty: 2 }]);
+
+  // La nota se borra igual, aunque no haya habido a qué producto
+  // devolverle el stock.
+  assert.equal(firebase._store.orders['order1'], undefined, 'la nota debe quedar eliminada aunque el producto ya no exista');
+  assert.equal(firebase._store.products['GTR-001'], undefined, 'no debe recrear un producto fantasma sin nombre');
 });
 
 test('saveProduct con isNew=true sobre un producto borrado lógicamente: revive el código en vez de rechazarlo', async () => {
