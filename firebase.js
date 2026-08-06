@@ -162,6 +162,16 @@ function writeLocalCache(key, cache) {
 // (products o clients), reutilizado por watchProducts/watchClients.
 // idField: nombre de la clave del hijo dentro de cada objeto emitido
 // (ej. 'code' para productos, 'ruc' para clientes).
+// Devuelve un objeto { forceRefresh } además de arrancar el watcher.
+// forceRefresh() permite a otras pantallas (ej. import-stock.js
+// después de terminar una importación) pedir una lectura fresca de
+// TODO el nodo ahora mismo, sin esperar al listener en tiempo real
+// ni a la resincronización periódica de 3 horas. Esto es lo que
+// garantiza que, apenas termina una importación, los datos se vean
+// actualizados al instante en la propia pantalla que importó —
+// incluso si por cualquier motivo el listener en vivo tarda o falla
+// en avisar (websocket que tarda un instante en reflejar la propia
+// escritura, pestaña que estuvo en segundo plano, etc.).
 function watchCollectionWithCache(ref, cacheKey, idField, callback, onError) {
   const itemsMap = new Map();
   let emitTimer = null;
@@ -206,8 +216,29 @@ function watchCollectionWithCache(ref, cacheKey, idField, callback, onError) {
   const query = needsFullResync ? ref : ref.orderByChild('updatedAt').startAt(cache.lastSync + 1);
   if (needsFullResync) itemsMap.clear(); // resincronización completa: se descarta el caché viejo por si acaso quedó un borrado sin reflejar
 
+  let lastFullSyncSoFar = lastFullSyncToKeep;
+
+  // Trae TODO el nodo de nuevo ahora mismo (bypasea el filtro
+  // incremental y la espera de 3 horas), reemplaza el caché en
+  // memoria por completo (así también se limpian productos borrados
+  // que hubieran quedado colgados) y re-emite a la pantalla. Se
+  // reintenta la lectura tal cual pase lo que pase con la conexión
+  // en vivo — es una lectura de "una sola vez", no depende de que el
+  // listener esté conectado.
+  function forceRefresh() {
+    return ref.once('value').then(snap => {
+      itemsMap.clear();
+      const ts = Date.now();
+      lastFullSyncSoFar = ts;
+      applySnapshotAndPersist(snap, ts, ts);
+    }).catch(err => {
+      if (onError) onError(err);
+      throw err;
+    });
+  }
+
   query.once('value').then(snap => {
-    applySnapshotAndPersist(snap, now, lastFullSyncToKeep);
+    applySnapshotAndPersist(snap, now, lastFullSyncSoFar);
 
     // 2) De ahora en más, cualquier alta o cambio (de este dispositivo
     // o de cualquier otro) llega en tiempo real, pero SOLO a partir de
@@ -218,17 +249,19 @@ function watchCollectionWithCache(ref, cacheKey, idField, callback, onError) {
       const item = { ...s.val() }; item[idField] = s.key;
       itemsMap.set(s.key, item);
       scheduleEmit();
-      persist(Date.now(), lastFullSyncToKeep);
+      persist(Date.now(), lastFullSyncSoFar);
     }, onError);
     liveQuery.on('child_changed', s => {
       const item = { ...s.val() }; item[idField] = s.key;
       itemsMap.set(s.key, item);
       scheduleEmit();
-      persist(Date.now(), lastFullSyncToKeep);
+      persist(Date.now(), lastFullSyncSoFar);
     }, onError);
 
     watchCollectionWithCache._activeQueries.push(liveQuery);
   }).catch(onError);
+
+  return { forceRefresh };
 }
 watchCollectionWithCache._activeQueries = [];
 
@@ -246,7 +279,33 @@ function watchProducts(callback) {
     console.error('[Firebase] Error leyendo /products:', err);
     alert('No se pudo cargar el stock (permiso denegado o sin conexión). Revisa la consola para más detalle.');
   };
-  watchCollectionWithCache(refProducts, 'mf_cache_products_v1', 'code', callback, onError);
+  const watcher = watchCollectionWithCache(refProducts, 'mf_cache_products_v1', 'code', callback, onError);
+  // Se guarda la referencia global al watcher de productos para que
+  // cualquier otra pantalla (ej. import-stock.js) pueda pedir un
+  // refresco inmediato después de escribir en Firebase, en vez de
+  // depender únicamente del listener en tiempo real.
+  window._productsWatcher = watcher;
+  return watcher;
+}
+
+// Fuerza a que Stock (y cualquier otra vista que use watchProducts)
+// vuelva a leer /products completo ahora mismo, ignorando el caché
+// local y la ventana de 3 horas. Se usa después de importar/guardar
+// en bloque para que los datos actualizados aparezcan al instante,
+// sin depender de que el listener en tiempo real llegue a tiempo.
+// Devuelve una promesa que resuelve cuando el refresco terminó.
+function refreshProductsNow() {
+  if (window._productsWatcher && typeof window._productsWatcher.forceRefresh === 'function') {
+    return window._productsWatcher.forceRefresh();
+  }
+  // watchProducts todavía no corrió en esta pantalla (ej. se llamó
+  // desde una vista donde Stock no está montado) — no hay nada que
+  // refrescar en memoria, pero al menos se limpia el caché guardado
+  // para que la próxima vez que se abra Stock traiga todo de nuevo.
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.removeItem('mf_cache_products_v1');
+  } catch (err) {}
+  return Promise.resolve();
 }
 
 // Antes: "Guardar cambios" en el modal de Editar producto hacía un

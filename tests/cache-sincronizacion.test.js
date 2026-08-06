@@ -111,6 +111,52 @@ test('watchProducts: un producto borrado por otro dispositivo NO desaparece hast
   assert.ok(listAfterFullResync.some(p => p.code === 'GTR-001'), 'el producto que sigue existiendo se mantiene tras la resincronización completa');
 });
 
+test('refreshProductsNow(): fuerza un refresco completo al instante, sin esperar el listener en tiempo real ni las 3 horas', async () => {
+  const { window, firebase } = setup();
+  firebase._store.products = {
+    'GTR-001': { name: 'Guitarra', stock: 10, price: 100, updatedAt: 1000 },
+  };
+
+  let lastList = null;
+  window.watchProducts(list => { lastList = list; });
+  await waitTick();
+  assert.equal(lastList.find(p => p.code === 'GTR-001').price, 100);
+
+  // Se simula lo que hace "Importar todo": otra escritura reemplaza
+  // precio y stock directamente en el árbol (como si import-stock.js
+  // hubiera llamado a saveProduct), y además se borra un producto —
+  // sin pasar por watchProducts, para que el listener en tiempo real
+  // no tenga por qué haberse enterado todavía.
+  firebase._store.products['GTR-001'] = { name: 'Guitarra', stock: 25, price: 150, updatedAt: 999999999999 };
+
+  await window.refreshProductsNow();
+  await waitTick();
+
+  const updated = lastList.find(p => p.code === 'GTR-001');
+  assert.equal(updated.price, 150, 'refreshProductsNow debe traer el precio reemplazado al instante');
+  assert.equal(updated.stock, 25, 'refreshProductsNow debe traer la cantidad reemplazada al instante');
+});
+
+test('refreshProductsNow(): un borrado se refleja al instante (no hace falta esperar las 3 horas)', async () => {
+  const { window, firebase } = setup();
+  firebase._store.products = {
+    'GTR-001': { name: 'Guitarra', stock: 10, price: 100, updatedAt: 1000 },
+    'AMP-002': { name: 'Amplificador', stock: 5, price: 300, updatedAt: 1000 },
+  };
+
+  let list = null;
+  window.watchProducts(l => { list = l; });
+  await waitTick();
+  assert.ok(list.some(p => p.code === 'AMP-002'));
+
+  delete firebase._store.products['AMP-002'];
+  await window.refreshProductsNow();
+  await waitTick();
+
+  assert.ok(!list.some(p => p.code === 'AMP-002'), 'tras refreshProductsNow, el producto borrado ya no debe aparecer, sin esperar 3 horas');
+  assert.ok(list.some(p => p.code === 'GTR-001'));
+});
+
 test('watchClients: mismo mecanismo de caché+delta que watchProducts', async () => {
   const { window, firebase } = setup();
   firebase._store.clients = {

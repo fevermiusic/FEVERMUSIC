@@ -696,8 +696,17 @@ async function processImportStock() {
     // con esos códigos.
     showImportStockStep('stepDoneStock');
 
-    if (typeof loadProducts === 'function') {
-      loadProducts();
+    // Refresco inmediato y garantizado: se pide a Firebase el nodo
+    // /products completo ahora mismo (sin esperar al listener en
+    // tiempo real ni a la resincronización de 3 horas), así que en
+    // cuanto termina la importación, Stock ya muestra los precios y
+    // cantidades actualizados sin necesidad de recargar la página.
+    // (Antes acá se llamaba a "loadProducts()", una función que
+    // nunca existió en el proyecto — no hacía nada.)
+    if (typeof refreshProductsNow === 'function') {
+      refreshProductsNow().catch(function(err) {
+        console.error('[Importar] No se pudo refrescar el stock tras importar:', err);
+      });
     }
   } catch (err) {
     alert('Error al guardar: ' + err.message);
