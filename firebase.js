@@ -205,6 +205,7 @@ function watchCollectionWithCache(ref, cacheKey, idField, callback, onError) {
   function applySnapshotAndPersist(snap, lastSyncTs, lastFullSyncTs) {
     snap.forEach(child => {
       const val = child.val();
+      if (val && val.deleted) { itemsMap.delete(child.key); return; } // borrado lógico: no se pinta ni se guarda en caché
       const item = { ...val };
       item[idField] = child.key;
       itemsMap.set(child.key, item);
@@ -246,13 +247,25 @@ function watchCollectionWithCache(ref, cacheKey, idField, callback, onError) {
     // catálogo entero como haría un .on('child_added') sin filtro.
     const liveQuery = ref.orderByChild('updatedAt').startAt(now);
     liveQuery.on('child_added', s => {
-      const item = { ...s.val() }; item[idField] = s.key;
+      const val = s.val();
+      if (val && val.deleted) return; // por si acaso llega ya marcado como eliminado
+      const item = { ...val }; item[idField] = s.key;
       itemsMap.set(s.key, item);
       scheduleEmit();
       persist(Date.now(), lastFullSyncSoFar);
     }, onError);
     liveQuery.on('child_changed', s => {
-      const item = { ...s.val() }; item[idField] = s.key;
+      const val = s.val();
+      if (val && val.deleted) {
+        // Borrado lógico hecho en cualquier dispositivo: llega como un
+        // cambio normal (mismo canal que editar precio/stock), así que
+        // se refleja al instante en todas las pantallas abiertas.
+        itemsMap.delete(s.key);
+        scheduleEmit();
+        persist(Date.now(), lastFullSyncSoFar);
+        return;
+      }
+      const item = { ...val }; item[idField] = s.key;
       itemsMap.set(s.key, item);
       scheduleEmit();
       persist(Date.now(), lastFullSyncSoFar);
@@ -416,9 +429,29 @@ function renameProductCode(oldCode, newCode) {
   });
 }
 
+// Antes: .remove() físico del nodo. Problema: el listener en tiempo
+// real de otras pantallas/dispositivos (watchCollectionWithCache)
+// solo escucha altas y cambios dentro de una ventana que arranca
+// desde que esa pantalla se abrió (orderByChild('updatedAt').startAt(now))
+// — a un borrado real no le cambia el updatedAt, simplemente
+// desaparece, así que ese listener nunca se entera. El único momento
+// en que un borrado se reflejaba en otro dispositivo era la
+// resincronización completa cada 3 horas (FULL_RESYNC_INTERVAL_MS).
+//
+// Ahora: borrado lógico. En vez de eliminar el nodo, se marca
+// deleted:true y se pisa updatedAt con la hora del servidor — esto
+// es indistinguible de una edición normal para el resto de la app,
+// así que SÍ le llega a cualquier pantalla abierta en cualquier
+// dispositivo por el canal de 'child_changed' que ya existe, al
+// instante. watchCollectionWithCache filtra los items con
+// deleted:true antes de mostrarlos (ver applySnapshotAndPersist).
 function deleteProduct(code) {
   try {
-    return refProducts.child(code).remove();
+    return refProducts.child(code).update({
+      deleted: true,
+      stock: 0,
+      updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
   } catch (err) {
     // .child() valida la clave de forma SÍNCRONA — si el código tiene
     // un carácter que Firebase rechaza (dato viejo de antes de que
