@@ -158,8 +158,7 @@ function confirmOrder() {
             // decrementStock ya falló y no aplicó nada (es transaccional),
             // pero el addStock de arriba SÍ se aplicó — hay que revertirlo
             // para no dejar el stock inflado con cantidades "fantasma".
-            return Promise.all(editingOriginalItems.map(i => addStock(i.code, -i.qty)))
-              .catch(() => {}) // best-effort: si esto también falla, seguimos igual al error original
+            return Promise.all(editingOriginalItems.map(i => addStockWithRetry(i.code, -i.qty)))
               .then(() => { throw err; });
           })
         )
@@ -210,8 +209,7 @@ function confirmOrder() {
         // "fantasma" que el descuento-primero buscaba evitar, pero en
         // sentido inverso). Se revierte el descuento antes de propagar
         // el error original.
-        return Promise.all(items.map(i => addStock(i.code, i.qty)))
-          .catch(() => {}) // best-effort: si el rollback también falla, seguimos con el error original
+        return Promise.all(items.map(i => addStockWithRetry(i.code, i.qty)))
           .then(() => { throw err; });
       })
     )

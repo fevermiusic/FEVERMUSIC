@@ -47,19 +47,6 @@ window.NuevaNota = {
   init(params) {
     params = params || {};
 
-    // Al abrir esta vista se pide una lectura fresca de /products a
-    // Firebase (bypasea la caché local del dispositivo y la ventana
-    // de 3 horas). Sin esto, un teléfono que quedó con la caché
-    // local vieja para algún producto puntual (ej. guardada antes de
-    // que se le completara el nombre, o corrompida) podía mostrar y
-    // vender con datos desactualizados sin que nadie se diera cuenta
-    // hasta que Firebase rechazaba el guardado del pedido. Es
-    // "fire and forget": no bloquea la apertura de la vista, corre en
-    // paralelo y actualiza productsCache apenas responde el servidor.
-    if (window._productsWatcher && typeof window._productsWatcher.forceRefresh === 'function') {
-      window._productsWatcher.forceRefresh().catch(() => {});
-    }
-
     clientRuc    = params.ruc    || '';
     clientNombre = params.nombre || '';
     document.getElementById('displayRuc').textContent    = clientRuc    || '—';

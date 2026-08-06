@@ -172,7 +172,26 @@ function writeLocalCache(key, cache) {
 // incluso si por cualquier motivo el listener en vivo tarda o falla
 // en avisar (websocket que tarda un instante en reflejar la propia
 // escritura, pestaña que estuvo en segundo plano, etc.).
-function watchCollectionWithCache(ref, cacheKey, idField, callback, onError) {
+//
+// persistCache (default true): si es false, esta colección NUNCA lee
+// ni escribe el snapshot en localStorage — cada vez que la app
+// arranca (o el teléfono la reabre después de días sin usarla) se
+// hace SIEMPRE una lectura completa y fresca del servidor antes de
+// mostrar nada, en vez de pintar primero con lo que haya quedado
+// guardado de una sesión anterior. Se usa en /products: un producto
+// vendido en Nueva Nota depende de que su nombre/precio/stock sean
+// exactos AHORA, no de hace horas o días — un dato viejo ahí no es
+// solo un detalle visual, puede tumbar la confirmación de un pedido
+// completo o descontar stock sobre un valor que ya no es real. Una
+// vez conectado, el listener en tiempo real (más abajo) sigue
+// funcionando igual de bien sin este caché — la app recibe cada
+// cambio al instante mientras esté abierta, sin volver a pedir nada.
+// /clients sí mantiene el caché (persistCache=true): ahí un dato con
+// unas horas de atraso (ej. un cliente nuevo que tarda en aparecer)
+// no rompe nada, y sigue aportando el ahorro de ancho de banda
+// original (ver bloque de arriba) para esa colección.
+function watchCollectionWithCache(ref, cacheKey, idField, callback, onError, persistCache) {
+  if (persistCache === undefined) persistCache = true;
   const itemsMap = new Map();
   let emitTimer = null;
   const scheduleEmit = () => {
@@ -183,20 +202,24 @@ function watchCollectionWithCache(ref, cacheKey, idField, callback, onError) {
     }, 50);
   };
 
-  const cache = readLocalCache(cacheKey);
+  const cache = persistCache ? readLocalCache(cacheKey) : null;
   const now = Date.now();
-  const needsFullResync = !cache || !cache.lastFullSync || (now - cache.lastFullSync) > FULL_RESYNC_INTERVAL_MS;
+  const needsFullResync = !persistCache || !cache || !cache.lastFullSync || (now - cache.lastFullSync) > FULL_RESYNC_INTERVAL_MS;
   const lastFullSyncToKeep = (cache && !needsFullResync) ? cache.lastFullSync : now;
 
   // 1) Pintar de inmediato con lo último guardado localmente, sin
   // esperar ninguna respuesta de red — así la pantalla no queda en
-  // blanco mientras se resuelve la sincronización de abajo.
+  // blanco mientras se resuelve la sincronización de abajo. Si
+  // persistCache es false, no hay nada guardado que pintar: se espera
+  // la lectura completa de abajo (siempre corta, /products no es tan
+  // grande como para notarse en la práctica).
   if (cache && cache.items) {
     Object.keys(cache.items).forEach(key => itemsMap.set(key, cache.items[key]));
     scheduleEmit();
   }
 
   function persist(lastSyncTs, lastFullSyncTs) {
+    if (!persistCache) return;
     const items = {};
     itemsMap.forEach((v, k) => { items[k] = v; });
     writeLocalCache(cacheKey, { items, lastSync: lastSyncTs, lastFullSync: lastFullSyncTs });
@@ -304,7 +327,17 @@ function watchProducts(callback) {
     console.error('[Firebase] Error leyendo /products:', err);
     alert('No se pudo cargar el stock (permiso denegado o sin conexión). Revisa la consola para más detalle.');
   };
-  const watcher = watchCollectionWithCache(refProducts, 'mf_cache_products_v1', 'code', callback, onError);
+  // Limpieza única: borra cualquier snapshot de /products que haya
+  // quedado guardado en este dispositivo de versiones anteriores de
+  // la app (cuando SÍ se persistía entre sesiones). Sin esto, un
+  // teléfono que ya tenía guardado un "mf_cache_products_v1" viejo lo
+  // seguiría teniendo en su almacenamiento aunque el código ya no lo
+  // lea nunca más — no causa ningún daño dejarlo ahí, pero tampoco
+  // sirve de nada y solo ocupa espacio.
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.removeItem('mf_cache_products_v1');
+  } catch (err) {}
+  const watcher = watchCollectionWithCache(refProducts, 'mf_cache_products_v1', 'code', callback, onError, /* persistCache */ false);
   // Se guarda la referencia global al watcher de productos para que
   // cualquier otra pantalla (ej. import-stock.js) pueda pedir un
   // refresco inmediato después de escribir en Firebase, en vez de
@@ -508,6 +541,36 @@ function addStock(code, qty) {
   return stockUpdate.then(result => touch.then(() => result));
 }
 
+// Suma qty a un producto reintentando varias veces antes de rendirse.
+// Se usa específicamente para REVERTIR un descuento de stock que no
+// debía haber quedado aplicado (ver decrementStock y confirmOrder) —
+// a diferencia de una escritura normal, acá no hay margen para un
+// "best-effort" silencioso: si esto no se aplica, el negocio pierde
+// stock real sin ningún pedido que lo respalde, y nadie se entera
+// hasta que alguien intenta vender algo que "debería" tener stock.
+async function addStockWithRetry(code, qty, attempts) {
+  attempts = attempts || 3;
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await addStock(code, qty);
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, 400 * (i + 1)));
+    }
+  }
+  // Se agotaron los reintentos: en vez de tragarse el error (como
+  // antes), se avisa de forma imposible de ignorar — con el código y
+  // la cantidad exactos para que se pueda corregir a mano en Stock
+  // ahora mismo, en vez de que el inventario quede mal en silencio.
+  console.error(`[Firebase] No se pudo revertir stock de ${code} (+${qty}) tras ${attempts} intentos:`, lastErr);
+  alert(
+    `⚠ IMPORTANTE: no se pudo devolver ${qty} unidad(es) al stock de "${code}" tras un error. ` +
+    `Anda a Stock AHORA y sumale ${qty} manualmente a ese código para que el inventario quede correcto.`
+  );
+}
+
 async function decrementStock(items) {
   const results = await Promise.all(items.map(async item => {
     const stockRef = refProducts.child(item.code).child('stock');
@@ -537,12 +600,10 @@ async function decrementStock(items) {
     // dejaba el inventario reducido "fantasma" sin ningún pedido real
     // detrás — se perdía stock silenciosamente cada vez que un
     // pedido con varios productos fallaba a medias.
-    // Ahora, si algo falla, se revierte (best-effort) lo que sí se
-    // había descontado, para que la operación sea todo-o-nada.
-    await Promise.all(succeeded.map(r =>
-      refProducts.child(r.code).child('stock').transaction(current => (current || 0) + r.qty)
-        .then(() => refProducts.child(r.code).update({ updatedAt: firebase.database.ServerValue.TIMESTAMP }).catch(() => {}))
-    )).catch(() => {});
+    // Ahora, si algo falla, se revierte (con reintentos, y avisando
+    // fuerte si aun así no se puede) lo que sí se había descontado,
+    // para que la operación sea todo-o-nada de verdad.
+    await Promise.all(succeeded.map(r => addStockWithRetry(r.code, r.qty)));
 
     const err = new Error(
       'Stock insuficiente para: ' + failed.map(f => f.code).join(', ') +

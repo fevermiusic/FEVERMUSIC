@@ -1,17 +1,25 @@
 // tests/cache-sincronizacion.test.js
 //
 // Verifica el mecanismo de caché local + sincronización incremental
-// de watchProducts/watchClients (ver el bloque "CACHÉ LOCAL +
-// SINCRONIZACIÓN INCREMENTAL" en firebase.js). El objetivo del
-// mecanismo es dejar de bajar el catálogo completo de /products y
-// /clients cada vez que se abre la app — estas pruebas confirman que:
+// de firebase.js (ver el bloque "CACHÉ LOCAL + SINCRONIZACIÓN
+// INCREMENTAL"). Desde el bug real de un producto vendido con datos
+// desactualizados en el teléfono de un vendedor (nombre/precio
+// viejos que llegaron a tumbar la confirmación de un pedido),
+// /products dejó de persistir caché entre sesiones (persistCache:
+// false) — cada vez que la app arranca, SIEMPRE hace una lectura
+// completa y fresca del servidor antes de mostrar nada. /clients sí
+// sigue con el caché+delta original (persistCache: true, el
+// comportamiento por defecto), porque ahí un dato con unas horas de
+// atraso no tiene ningún riesgo real. Estas pruebas confirman que:
 //   1) toda escritura marca "updatedAt" (lo que hace posible pedir
-//      "solo lo que cambió"),
-//   2) una sincronización con caché reciente SÍ recoge altas/cambios
-//      hechos por otro dispositivo después de la última sync,
-//   3) un borrado hecho por otro dispositivo NO se refleja hasta la
-//      próxima resincronización completa (limitación conocida y
-//      aceptada, documentada en el código — no es un bug).
+//      "solo lo que cambió", usado por /clients),
+//   2) watchProducts NUNCA persiste ni confía en un snapshot viejo
+//      entre sesiones — cada conexión trae todo fresco del servidor,
+//   3) watchClients SÍ mantiene el caché+delta: una sincronización
+//      con caché reciente recoge altas/cambios de otro dispositivo
+//      sin bajar todo /clients, aunque un borrado no se refleje hasta
+//      la próxima resincronización completa (limitación aceptada,
+//      documentada en el código, solo para /clients).
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -44,41 +52,39 @@ test('saveProduct / addStock / decrementStock / saveClient marcan "updatedAt"', 
   assert.ok(typeof firebase._store.clients['20123456789'].updatedAt === 'number', 'saveClient debe marcar updatedAt');
 });
 
-test('watchProducts: con caché reciente, un alta de otro dispositivo SÍ se refleja (sin necesitar bajar todo /products)', async () => {
+test('watchProducts: NO persiste caché entre sesiones — cada conexión trae /products completo y fresco del servidor', async () => {
   const { window, firebase } = setup();
   firebase._store.products = {
     'GTR-001': { name: 'Guitarra', stock: 10, price: 100, updatedAt: 1000 },
   };
 
-  // Primera "sesión": watchProducts hace la sincronización inicial y
-  // guarda el caché en localStorage.
+  // Primera "sesión": watchProducts hace la sincronización inicial.
   let lastList = null;
   window.watchProducts(list => { lastList = list; });
   await waitTick();
   assert.equal(lastList.length, 1, 'primera carga debe traer el único producto existente');
 
+  // A diferencia de /clients, acá NO debe quedar nada guardado en
+  // localStorage — justamente lo que evita que un teléfono venda con
+  // datos de hace horas/días si no se refresca a tiempo.
   const cacheRaw = window.localStorage.getItem('mf_cache_products_v1');
-  assert.ok(cacheRaw, 'debe haber quedado un caché guardado en localStorage');
-  const cache = JSON.parse(cacheRaw);
-  assert.ok(cache.lastSync > 0 && cache.lastFullSync > 0, 'el caché debe registrar lastSync y lastFullSync');
+  assert.equal(cacheRaw, null, 'watchProducts no debe dejar ningún caché persistido en localStorage');
 
-  // "Otro dispositivo" crea un producto nuevo con updatedAt posterior
-  // a la última sincronización.
-  firebase._store.products['AMP-002'] = { name: 'Amplificador', stock: 5, price: 300, updatedAt: cache.lastSync + 5000 };
+  // "Otro dispositivo" crea un producto nuevo.
+  firebase._store.products['AMP-002'] = { name: 'Amplificador', stock: 5, price: 300, updatedAt: Date.now() };
 
-  // Segunda "sesión" en la MISMA pestaña/localStorage (simula reabrir
-  // la app): watchProducts debe partir del caché guardado y traer el
-  // producto nuevo vía la consulta incremental, sin volver a
-  // re-emitir todo desde cero como un child_added sin filtro.
+  // Segunda "sesión" (simula reabrir la app días después, sin ningún
+  // caché del que partir): debe traer el catálogo completo y fresco,
+  // incluyendo el producto nuevo.
   let secondList = null;
   window.watchProducts(list => { secondList = list; });
   await waitTick();
 
-  assert.ok(secondList.some(p => p.code === 'AMP-002'), 'el producto nuevo de otro dispositivo debe aparecer tras la sincronización incremental');
-  assert.ok(secondList.some(p => p.code === 'GTR-001'), 'el producto viejo (ya en caché) se mantiene');
+  assert.ok(secondList.some(p => p.code === 'AMP-002'), 'el producto nuevo de otro dispositivo debe aparecer (lectura completa fresca)');
+  assert.ok(secondList.some(p => p.code === 'GTR-001'), 'el producto viejo se mantiene');
 });
 
-test('watchProducts: un producto borrado por otro dispositivo NO desaparece hasta la resincronización completa (limitación aceptada)', async () => {
+test('watchProducts: un producto borrado por otro dispositivo SÍ desaparece de inmediato en la siguiente sesión (sin esperar 3 horas)', async () => {
   const { window, firebase } = setup();
   firebase._store.products = {
     'GTR-001': { name: 'Guitarra', stock: 10, price: 100, updatedAt: 1000 },
@@ -91,24 +97,15 @@ test('watchProducts: un producto borrado por otro dispositivo NO desaparece hast
   // Otro dispositivo borra AMP-002 directamente del árbol.
   delete firebase._store.products['AMP-002'];
 
-  // lastFullSync sigue "reciente" (no pasaron las 3hs) -> no toca
-  // resincronizar completo, así que el borrado no se detecta todavía.
+  // Como /products ya no persiste caché entre sesiones, CUALQUIER
+  // nueva conexión (reabrir la app) hace una lectura completa —
+  // el borrado se ve al instante, sin esperar ninguna ventana de
+  // 3 horas (esa limitación solo sigue existiendo para /clients).
   let list = null;
   window.watchProducts(l => { list = l; });
   await waitTick();
-  assert.ok(list.some(p => p.code === 'AMP-002'), 'mientras no toque una resincronización completa, el producto borrado sigue en la lista (limitación documentada)');
-
-  // Se simula que ya pasaron más de 3 horas desde la última
-  // resincronización completa, editando el caché guardado.
-  const cache = JSON.parse(window.localStorage.getItem('mf_cache_products_v1'));
-  cache.lastFullSync = Date.now() - (4 * 60 * 60 * 1000);
-  window.localStorage.setItem('mf_cache_products_v1', JSON.stringify(cache));
-
-  let listAfterFullResync = null;
-  window.watchProducts(l => { listAfterFullResync = l; });
-  await waitTick();
-  assert.ok(!listAfterFullResync.some(p => p.code === 'AMP-002'), 'tras la resincronización completa, el producto borrado ya no debe aparecer');
-  assert.ok(listAfterFullResync.some(p => p.code === 'GTR-001'), 'el producto que sigue existiendo se mantiene tras la resincronización completa');
+  assert.ok(!list.some(p => p.code === 'AMP-002'), 'el producto borrado ya no debe aparecer en la siguiente sesión');
+  assert.ok(list.some(p => p.code === 'GTR-001'), 'el producto que sigue existiendo se mantiene');
 });
 
 test('refreshProductsNow(): fuerza un refresco completo al instante, sin esperar el listener en tiempo real ni las 3 horas', async () => {
@@ -184,7 +181,7 @@ test('watchProducts: un borrado lógico (deleteProduct) SÍ se refleja al instan
   assert.ok(listA.some(p => p.code === 'GTR-001'), 'el producto que sigue existiendo no se ve afectado');
 });
 
-test('watchClients: mismo mecanismo de caché+delta que watchProducts', async () => {
+test('watchClients: caché+delta persistido entre sesiones (a diferencia de watchProducts)', async () => {
   const { window, firebase } = setup();
   firebase._store.clients = {
     '20111111111': { nombre: 'Cliente A', ciudad: 'Lima', updatedAt: 1000 },
