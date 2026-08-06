@@ -46,6 +46,20 @@ let suggestionScrollWired  = false;
 window.NuevaNota = {
   init(params) {
     params = params || {};
+
+    // Al abrir esta vista se pide una lectura fresca de /products a
+    // Firebase (bypasea la caché local del dispositivo y la ventana
+    // de 3 horas). Sin esto, un teléfono que quedó con la caché
+    // local vieja para algún producto puntual (ej. guardada antes de
+    // que se le completara el nombre, o corrompida) podía mostrar y
+    // vender con datos desactualizados sin que nadie se diera cuenta
+    // hasta que Firebase rechazaba el guardado del pedido. Es
+    // "fire and forget": no bloquea la apertura de la vista, corre en
+    // paralelo y actualiza productsCache apenas responde el servidor.
+    if (window._productsWatcher && typeof window._productsWatcher.forceRefresh === 'function') {
+      window._productsWatcher.forceRefresh().catch(() => {});
+    }
+
     clientRuc    = params.ruc    || '';
     clientNombre = params.nombre || '';
     document.getElementById('displayRuc').textContent    = clientRuc    || '—';
@@ -205,12 +219,13 @@ function renderSuggestions() {
     const stockClass  = stockVal > 6 ? 'stock-green' : 'stock-red';
     const highlighted = i === suggestionIndex ? 'highlighted' : '';
     const safePrice = fmt(p.price);
-    const safeName = p.name || '';
+    const hasName  = !!(p.name && String(p.name).trim());
+    const safeName = hasName ? p.name : '⚠ Actualizando datos…';
     const safeCode = p.code || '';
     return `
       <div class="suggestion-item ${highlighted}" onmousedown="selectProduct('${escapeJsAttr(safeCode)}')">
         <div class="suggestion-main">
-          <span class="suggestion-name">${escapeHtml(safeName)}</span>
+          <span class="suggestion-name"${hasName ? '' : ' style="color:#B91C1C;font-style:italic"'}>${escapeHtml(safeName)}</span>
           <span class="suggestion-code">${escapeHtml(displayProductCode(safeCode))}</span>
         </div>
         <div class="suggestion-meta">
@@ -244,6 +259,36 @@ function renderSuggestions() {
 function selectProduct(code) {
   const p = productsCache.find(x => x.code === code);
   if (!p) return;
+  if (!p.name || !String(p.name).trim()) {
+    // Puede ser un dato realmente incompleto en Firebase, o (más
+    // común) una caché local vieja en ESTE dispositivo que todavía
+    // no se refrescó. Se pide una lectura fresca del servidor antes
+    // de decidir cuál de los dos casos es — así un dato viejo en el
+    // teléfono se autorepara solo, sin culpar a la base de datos ni
+    // mandar al vendedor a "arreglar" algo que ya está bien.
+    document.getElementById('productSuggestions').style.display = 'none';
+    if (window._productsWatcher && typeof window._productsWatcher.forceRefresh === 'function') {
+      window._productsWatcher.forceRefresh().then(() => {
+        const fresh = productsCache.find(x => x.code === code);
+        if (fresh && fresh.name && String(fresh.name).trim()) {
+          selectProduct(code); // reintenta ya con el dato correcto
+        } else {
+          alert(
+            `El producto "${displayProductCode(p.code)}" no tiene nombre guardado en el sistema. ` +
+            `Andá a Stock, buscá ese código y completale el nombre antes de venderlo.`
+          );
+        }
+      }).catch(() => {
+        alert('No se pudo verificar este producto (sin conexión). Intenta de nuevo.');
+      });
+    } else {
+      alert(
+        `El producto "${displayProductCode(p.code)}" no tiene nombre guardado. ` +
+        `Andá a Stock, buscá ese código y completale el nombre antes de venderlo.`
+      );
+    }
+    return;
+  }
   const safeName = p.name || '';
   const safeCode = p.code || '';
   const stockVal = p.stock !== undefined ? p.stock : 0;
@@ -339,6 +384,19 @@ function addItem() {
   if (!code) return alert('Selecciona un producto de la lista de sugerencias.');
   const p = productsCache.find(x => x.code === code);
   if (!p)    return alert('Selecciona un producto de la lista de sugerencias.');
+
+  // Red de seguridad final: selectProduct() ya se autorepara (pide
+  // datos frescos a Firebase) y bloquea llegar hasta acá sin nombre
+  // en el caso normal. Esto cubre una carrera rara (la caché cambió
+  // justo entre elegir el producto y tocar "Agregar"). Sin esto, el
+  // nombre llegaría como `undefined` al pedido y Firebase rechazaría
+  // TODO el guardado al confirmar (no acepta valores undefined).
+  if (!p.name || !String(p.name).trim()) {
+    return alert(
+      `El producto "${displayProductCode(p.code)}" no se pudo verificar (nombre no disponible). ` +
+      `Volvé a buscarlo e intenta de nuevo.`
+    );
+  }
 
   const qty   = parseInt(document.getElementById('addQty').value)    || 1;
   const price = parseFloat(document.getElementById('addPrice').value) || 0;

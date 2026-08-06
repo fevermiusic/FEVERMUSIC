@@ -81,6 +81,22 @@ function confirmOrder() {
   if (!clientRuc || !clientNombre) return alert('Asigna un cliente antes de confirmar.');
   if (items.length === 0)          return alert('Agrega al menos un artículo.');
 
+  // Última barrera antes de escribir en Firebase: addItem()/selectProduct()
+  // ya bloquean agregar un producto sin nombre, pero esto cubre
+  // cualquier otro camino que pudiera poblar `items` (ej. una nota
+  // vieja cargada desde Historial con datos corruptos de antes de
+  // este arreglo). Sin esto, Firebase rechazaría TODO el guardado
+  // recién al final, con un error críptico ("value argument contains
+  // undefined") y el usuario se enteraba después de "Confirmando…".
+  const sinNombre = items.filter(i => !i.name || !String(i.name).trim());
+  if (sinNombre.length > 0) {
+    return alert(
+      `Estos productos no tienen nombre guardado y no se pueden vender: ` +
+      sinNombre.map(i => displayProductCode(i.code)).join(', ') +
+      `. Quitalos del pedido y corregilos en Stock primero.`
+    );
+  }
+
   const isEdit = !!editingOrderId;
   const btn = document.querySelector('[onclick="confirmOrder()"]');
   if (btn) { btn.disabled = true; btn.textContent = isEdit ? 'Guardando…' : 'Confirmando…'; }

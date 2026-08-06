@@ -732,9 +732,35 @@ function watchOrderRemovals(callback) {
   });
 }
 
+// Firebase Realtime Database rechaza el .set()/.update() COMPLETO si
+// cualquier campo, a cualquier profundidad, es `undefined` (no lo
+// omite en silencio: tira el objeto entero). Esto ya causó un caso
+// real: un producto con nombre no sincronizado en la caché local de
+// un dispositivo llegó como `item.name === undefined` hasta acá y
+// tumbó la confirmación completa del pedido con un error críptico.
+// Se sanea como última red de seguridad, justo antes de escribir:
+// cualquier `undefined` que se haya colado por CUALQUIER camino (uno
+// ya cubierto en nueva-nota-logic.js/actions.js, o uno nuevo que
+// aparezca en el futuro) se reemplaza por un valor neutro en vez de
+// tumbar todo el guardado del pedido.
+function stripUndefinedDeep(value) {
+  if (Array.isArray(value)) {
+    return value.map(v => (v === undefined ? null : stripUndefinedDeep(v)));
+  }
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    const out = {};
+    Object.keys(value).forEach(k => {
+      const v = value[k];
+      out[k] = v === undefined ? null : stripUndefinedDeep(v);
+    });
+    return out;
+  }
+  return value;
+}
+
 function saveOrder(orderData) {
   const newRef = refOrders.push();
-  return newRef.set({ ...orderData, timestamp: Date.now() }).then(() => newRef.key);
+  return newRef.set(stripUndefinedDeep({ ...orderData, timestamp: Date.now() })).then(() => newRef.key);
 }
 
 // =========================================================
@@ -819,7 +845,7 @@ function updateOrder(id, orderData) {
       err.orderGone = true;
       throw err;
     }
-    return refOrders.child(id).update({ ...orderData });
+    return refOrders.child(id).update(stripUndefinedDeep({ ...orderData }));
   });
 }
 
