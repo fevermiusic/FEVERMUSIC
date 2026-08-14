@@ -54,9 +54,14 @@ function renderRegistros() {
             <span class="reg-status-label ${activo ? 'activo' : 'inactivo'}">${activo ? 'Activo' : 'Inactivo'}</span>
           </div>
         </td>
-        <td class="col-acts">${esUno ? '' : `<button class="btn-reg-delete" onclick="onDeleteUser('${escapeJsAttr(u.uid)}', '${escapeJsAttr(u.nombre || u.usuario || '')}')" title="Eliminar usuario">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-        </button>`}</td>
+        <td class="col-acts">${esUno ? '' : `<div class="reg-acts-cell">
+          <button class="btn-reg-edit" onclick="openEditVendor('${escapeJsAttr(u.uid)}')" title="Editar cuenta / cambiar contraseña">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn-reg-delete" onclick="onDeleteUser('${escapeJsAttr(u.uid)}', '${escapeJsAttr(u.nombre || u.usuario || '')}')" title="Eliminar usuario">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          </button>
+        </div>`}</td>
       </tr>
     `;
   }).join('');
@@ -165,7 +170,70 @@ document.addEventListener('DOMContentLoaded', () => {
   if (overlay) {
     overlay.addEventListener('click', e => { if (e.target === overlay) closeNewVendor(); });
   }
+  const editOverlay = document.getElementById('editVendorOverlay');
+  if (editOverlay) {
+    editOverlay.addEventListener('click', e => { if (e.target === editOverlay) closeEditVendor(); });
+  }
 });
+
+// ── Modal: editar cuenta / cambiar contraseña ──────────
+let editVendorUid = null;
+
+function openEditVendor(uid) {
+  const u = usersCache.find(x => x.uid === uid);
+  if (!u) return;
+  editVendorUid = uid;
+  document.getElementById('editVendorNombre').value = u.nombre || '';
+  document.getElementById('editVendorEmail').value = u.correo || '';
+  document.getElementById('editVendorPassword').value = '';
+  document.getElementById('editVendorError').style.display = 'none';
+  document.getElementById('editVendorOverlay').classList.add('open');
+}
+
+function closeEditVendor() {
+  editVendorUid = null;
+  document.getElementById('editVendorOverlay').classList.remove('open');
+}
+
+async function submitEditVendor() {
+  if (!editVendorUid) return;
+  const nombre = document.getElementById('editVendorNombre').value.trim();
+  const correo = document.getElementById('editVendorEmail').value.trim();
+  const nuevaPassword = document.getElementById('editVendorPassword').value;
+  const errorEl = document.getElementById('editVendorError');
+  const submitBtn = document.getElementById('editVendorSubmit');
+  errorEl.style.display = 'none';
+
+  if (!nombre) {
+    errorEl.textContent = 'El nombre no puede quedar vacío.';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (nuevaPassword && nuevaPassword.length < 6) {
+    errorEl.textContent = 'La contraseña debe tener al menos 6 caracteres (mínimo que exige Firebase).';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Guardando…';
+  try {
+    await updateUserProfile(editVendorUid, { nombre, correo });
+    if (nuevaPassword) {
+      await adminChangeVendorPassword(editVendorUid, nuevaPassword);
+    }
+    const u = usersCache.find(x => x.uid === editVendorUid);
+    if (u) { u.nombre = nombre; u.correo = correo; }
+    renderRegistros();
+    closeEditVendor();
+  } catch (err) {
+    errorEl.textContent = (err && err.message) || 'No se pudieron guardar los cambios.';
+    errorEl.style.display = 'block';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Guardar cambios';
+  }
+}
 
 // Punto de entrada que llama el router. La navegación (nav.js) ya
 // oculta este enlace para vendedor, pero esto es la barrera real:

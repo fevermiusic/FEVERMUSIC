@@ -1049,6 +1049,44 @@ function setUserActive(uid, activo) {
   return refUsers.child(uid).update({ activo: !!activo });
 }
 
+// Actualiza nombre/correo de un usuario ya existente. NO toca la
+// contraseña ni el "usuario" de inicio de sesión (ese es fijo desde
+// que se crea la cuenta) — solo estos dos campos informativos.
+function updateUserProfile(uid, { nombre, correo }) {
+  const patch = {};
+  if (nombre !== undefined) patch.nombre = nombre;
+  if (correo !== undefined) patch.correo = correo;
+  return refUsers.child(uid).update(patch);
+}
+
+// ⚠️ Reemplaza esta URL por la que te dé Vercel al desplegar
+// password-api/ (paso a paso en el mensaje donde se agregó esto).
+// Se ve así: https://musical-fever-password-api.vercel.app
+const PASSWORD_API_URL = 'https://password-api-eta.vercel.app/api/change-password';
+
+// Le pide al servidor (función en Vercel, plan gratis, sin tarjeta)
+// que cambie la contraseña de OTRO usuario. Esto NO se puede hacer
+// con el SDK de cliente — por eso viaja como una llamada a esa API,
+// mandando el token de la sesión actual del admin para que el
+// servidor confirme quién es antes de tocar nada.
+// Ver password-api/api/change-password.js para el detalle.
+async function adminChangeVendorPassword(uid, nuevaPassword) {
+  const idToken = await firebase.auth().currentUser.getIdToken();
+  const res = await fetch(PASSWORD_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + idToken,
+    },
+    body: JSON.stringify({ uid, nuevaPassword }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'No se pudo cambiar la contraseña.');
+  }
+  return data;
+}
+
 // Elimina el perfil del usuario en /users. Esto le quita el acceso
 // a la app de inmediato: las reglas de Firebase exigen que exista
 // /users/{uid} con activo === true para leer o escribir cualquier

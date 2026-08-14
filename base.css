@@ -918,14 +918,17 @@ td { padding: 13px 18px; vertical-align: middle; }
 }
 .reg-role-badge.admin { background: var(--red-bg); color: var(--red); }
 
-.btn-reg-delete {
+.reg-acts-cell { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+
+.btn-reg-delete, .btn-reg-edit {
   display: inline-flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; padding: 0;
   background: none; border: 1px solid var(--border); border-radius: var(--r-sm);
   color: var(--text-3); cursor: pointer; transition: background var(--t), color var(--t), border-color var(--t);
 }
 .btn-reg-delete:hover { background: var(--red-bg); color: var(--red); border-color: #FECACA; }
-.btn-reg-delete:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-reg-delete:disabled, .btn-reg-edit:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-reg-edit:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
 
 /* ─── Nav: "Registros" (gestión de cuentas) es exclusivo de admin ─── */
 .role-vendedor .nav-admin-only { display: none !important; }

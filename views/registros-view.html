@@ -74,3 +74,37 @@
     </div>
   </div>
 </div>
+
+<!-- Modal: editar cuenta / cambiar contraseña -->
+<div class="modal-overlay" id="editVendorOverlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div>
+        <h2>Editar cuenta</h2>
+        <p>El usuario de inicio de sesión no se puede cambiar</p>
+      </div>
+      <button class="modal-close" onclick="closeEditVendor()">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nombre</label>
+        <input type="text" id="editVendorNombre" class="form-input" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Correo <span style="font-weight:400;color:var(--text-3)">(opcional, solo de contacto)</span></label>
+        <input type="email" id="editVendorEmail" class="form-input" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nueva contraseña <span style="font-weight:400;color:var(--text-3)">(déjalo vacío para no cambiarla)</span></label>
+        <input type="text" id="editVendorPassword" class="form-input" placeholder="Mínimo 6 caracteres" autocomplete="off">
+      </div>
+      <p id="editVendorError" class="dcm-subtitle" style="color:var(--red);display:none"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeEditVendor()">Cancelar</button>
+      <button class="btn btn-primary" id="editVendorSubmit" onclick="submitEditVendor()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
