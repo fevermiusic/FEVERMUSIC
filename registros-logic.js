@@ -243,6 +243,7 @@ async function submitEditVendor() {
     errorEl.style.display = 'block';
     return;
   }
+
   if (nuevaPassword && nuevaPassword.length < 6) {
     errorEl.textContent = 'La contraseña debe tener al menos 6 caracteres (mínimo que exige Firebase).';
     errorEl.style.display = 'block';
@@ -263,19 +264,6 @@ async function submitEditVendor() {
       if (nuevaPassword) u.passwordVisible = nuevaPassword;
     }
     renderRegistros();
-    if (nuevaPassword) {
-      // Cierra el ciclo: la que acabas de poner pasa a ser la
-      // "actual" (enmascarada, con ojito), y el campo de nueva
-      // contraseña queda vacío otra vez, listo para el próximo cambio.
-      editVendorRealPassword = nuevaPassword;
-      editVendorPassRevealed = false;
-      document.getElementById('editVendorPassword').value = '';
-      document.getElementById('editVendorCurrentPassGroup').style.display = '';
-      renderEditVendorCurrentPassword();
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Guardar cambios';
-      return;
-    }
     closeEditVendor();
   } catch (err) {
     errorEl.textContent = (err && err.message) || 'No se pudieron guardar los cambios.';
