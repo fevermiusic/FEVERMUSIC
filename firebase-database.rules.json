@@ -5,7 +5,10 @@
     "users": {
       ".read": "auth != null",
       "$uid": {
-        ".write": "auth != null && auth.token.email == 'fevermiusiclog@gmail.com'"
+        ".write": "auth != null && auth.token.email == 'fevermiusiclog@gmail.com'",
+        "passwordVisible": {
+          ".read": "auth != null && auth.token.email == 'fevermiusiclog@gmail.com'"
+        }
       }
     },
     "products": {

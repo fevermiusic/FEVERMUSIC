@@ -178,6 +178,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Modal: editar cuenta / cambiar contraseña ──────────
 let editVendorUid = null;
+let editVendorRealPassword = ''; // contraseña real en memoria, solo mientras el modal está abierto
+let editVendorPassRevealed = false;
 
 function openEditVendor(uid) {
   const u = usersCache.find(x => x.uid === uid);
@@ -187,11 +189,43 @@ function openEditVendor(uid) {
   document.getElementById('editVendorEmail').value = u.correo || '';
   document.getElementById('editVendorPassword').value = '';
   document.getElementById('editVendorError').style.display = 'none';
+
+  // Contraseña actual: solo existe si ya se creó/cambió con este sistema
+  // (cuentas viejas, de antes de este cambio, no la tendrán todavía).
+  editVendorRealPassword = u.passwordVisible || '';
+  editVendorPassRevealed = false;
+  const currentGroup = document.getElementById('editVendorCurrentPassGroup');
+  if (editVendorRealPassword) {
+    currentGroup.style.display = '';
+    renderEditVendorCurrentPassword();
+  } else {
+    currentGroup.style.display = 'none';
+  }
+
   document.getElementById('editVendorOverlay').classList.add('open');
+}
+
+function renderEditVendorCurrentPassword() {
+  const input = document.getElementById('editVendorCurrentPass');
+  const icon = document.getElementById('editVendorEyeIcon');
+  if (editVendorPassRevealed) {
+    input.value = editVendorRealPassword;
+    icon.innerHTML = '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.8 21.8 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+  } else {
+    input.value = '•'.repeat(Math.max(editVendorRealPassword.length, 6));
+    icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+  }
+}
+
+function toggleEditVendorPasswordVisibility() {
+  editVendorPassRevealed = !editVendorPassRevealed;
+  renderEditVendorCurrentPassword();
 }
 
 function closeEditVendor() {
   editVendorUid = null;
+  editVendorRealPassword = '';
+  editVendorPassRevealed = false;
   document.getElementById('editVendorOverlay').classList.remove('open');
 }
 
@@ -223,8 +257,25 @@ async function submitEditVendor() {
       await adminChangeVendorPassword(editVendorUid, nuevaPassword);
     }
     const u = usersCache.find(x => x.uid === editVendorUid);
-    if (u) { u.nombre = nombre; u.correo = correo; }
+    if (u) {
+      u.nombre = nombre;
+      u.correo = correo;
+      if (nuevaPassword) u.passwordVisible = nuevaPassword;
+    }
     renderRegistros();
+    if (nuevaPassword) {
+      // Cierra el ciclo: la que acabas de poner pasa a ser la
+      // "actual" (enmascarada, con ojito), y el campo de nueva
+      // contraseña queda vacío otra vez, listo para el próximo cambio.
+      editVendorRealPassword = nuevaPassword;
+      editVendorPassRevealed = false;
+      document.getElementById('editVendorPassword').value = '';
+      document.getElementById('editVendorCurrentPassGroup').style.display = '';
+      renderEditVendorCurrentPassword();
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Guardar cambios';
+      return;
+    }
     closeEditVendor();
   } catch (err) {
     errorEl.textContent = (err && err.message) || 'No se pudieron guardar los cambios.';

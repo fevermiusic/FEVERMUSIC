@@ -1084,6 +1084,16 @@ async function adminChangeVendorPassword(uid, nuevaPassword) {
   if (!res.ok) {
     throw new Error(data.error || 'No se pudo cambiar la contraseña.');
   }
+  // Guarda la copia visible de la contraseña nueva para que el admin
+  // pueda volver a consultarla después desde "Editar cuenta". Si esto
+  // falla no se considera un error fatal: la contraseña YA se cambió
+  // en Firebase Auth (lo importante), solo no se actualizó la copia
+  // de referencia.
+  try {
+    await refUsers.child(uid).update({ passwordVisible: nuevaPassword });
+  } catch (err) {
+    console.error('No se pudo guardar la copia visible de la contraseña:', err);
+  }
   return data;
 }
 
@@ -1162,6 +1172,12 @@ async function createVendorAccount(usuario, password, nombre, correo) {
       rol: 'vendedor',
       activo: true,
       creadoEn: Date.now(),
+      // Copia en texto plano de la contraseña actual, SOLO para que el
+      // admin pueda volver a verla desde "Editar cuenta". Las reglas de
+      // Firebase restringen la lectura de este campo únicamente al
+      // admin (ver firebase-database.rules.json) — un vendedor nunca
+      // puede leer su propia contraseña ni la de otros por esta vía.
+      passwordVisible: password,
     });
     await secondaryApp.auth().signOut();
     return uid;
