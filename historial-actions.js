@@ -101,7 +101,7 @@ function verNota(orderId) {
 
   const items = o.items || [];
   document.getElementById('vBody').innerHTML = items.map(item => {
-    const subtotal = item.price * item.qty;
+    const subtotal = item.price * item.qty * (1 - (item.itemDiscountPct || 0) / 100);
     return `
       <tr>
         <td data-label="Código" style="font-family:monospace;font-size:11px;color:#64748b">${escapeHtml(displayProductCode(item.code))}</td>
@@ -437,7 +437,7 @@ async function captureNotaAsPdf() {
   y = drawTableHeader(page, y);
 
   for (const item of items) {
-    const subtotal  = (item.price || 0) * (item.qty || 0);
+    const subtotal  = (item.price || 0) * (item.qty || 0) * (1 - (item.itemDiscountPct || 0) / 100);
     const nameLines = wrapText(item.name, prodMaxW, font, 9.5);
     const descLines = item.desc ? wrapText(item.desc, prodMaxW, font, 8) : [];
     const lineH     = 12;
@@ -577,7 +577,7 @@ async function downloadNotaAs(tipo) {
       ];
 
       (o.items || []).forEach(item => {
-        rows.push([sanitizeForExcel(displayProductCode(item.code)), sanitizeForExcel(item.name), item.price || 0, item.qty || 0, item.itemDiscountPct || 0, (item.price || 0) * (item.qty || 0)]);
+        rows.push([sanitizeForExcel(displayProductCode(item.code)), sanitizeForExcel(item.name), item.price || 0, item.qty || 0, item.itemDiscountPct || 0, (item.price || 0) * (item.qty || 0) * (1 - (item.itemDiscountPct || 0) / 100)]);
       });
 
       rows.push([]);
