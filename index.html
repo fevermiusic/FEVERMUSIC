@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Musical Fever</title>
+<!-- BLOQUEANTE A PROPÓSITO (sin defer/async): oculta la página de
+     inmediato, antes de que el navegador pinte NADA. Esto es lo que
+     realmente evita el "flash" de contenido sin sesión — depender
+     solo de auth-guard.js (que es defer) no lo garantiza, porque
+     ese script puede ejecutarse después de que el navegador ya
+     pintó algo. Esta línea SIEMPRE corre primero. -->
+<script>document.documentElement.style.visibility = 'hidden';</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="variables.css">
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="stock-card.css">
+<link rel="stylesheet" href="import.css">
+<link rel="stylesheet" href="nueva-nota.css">
+<!-- Firebase — se carga UNA sola vez, para toda la sesión -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Sidebar: fijo, nunca se recarga ── -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm12-2c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z"/></svg>
+        </div>
+        <div>
+          <div class="brand-name">FeverMusic</div>
+          <div class="brand-sub"><span class="status-dot"></span>Sistema activo</div>
+        </div>
+      </div>
+      <!-- El botón de cerrar sesión de arriba se quitó: ya existe
+           "Cerrar sesión" (junto con "Cambiar de cuenta") en el menú
+           de la tarjeta de usuario, abajo del sidebar. -->
+
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Gestión</div>
+      <a class="nav-item" data-page="stock" href="#stock">
+        <svg viewBox="0 0 24 24"><rect x="2" y="3" width="6" height="6" rx="1"/><rect x="9" y="3" width="13" height="2" rx="1"/><rect x="9" y="7" width="8" height="2" rx="1"/><rect x="2" y="11" width="6" height="6" rx="1"/><rect x="9" y="11" width="13" height="2" rx="1"/><rect x="9" y="15" width="8" height="2" rx="1"/></svg>
+        Stock
+      </a>
+      <a class="nav-item" data-page="pedidos" href="#pedidos">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Notas de Pedido
+      </a>
+      <div class="nav-section-label">Historial</div>
+      <a class="nav-item" data-page="historial" href="#historial">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Historial
+      </a>
+      <div class="nav-section-label nav-admin-only">Administración</div>
+      <a class="nav-item nav-admin-only" data-page="registros" href="#registros">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Registros
+      </a>
+      <a class="nav-item nav-item-logout" id="logoutNavItem" href="#">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Salir
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card-wrap">
+        <div class="user-card" id="userCard">
+          <div class="avatar">FV</div>
+          <div>
+            <div class="user-name">Cargando…</div>
+            <div class="user-role"></div>
+          </div>
+          <button class="user-menu-toggle" id="userMenuToggle" type="button" title="Opciones de cuenta" aria-label="Opciones de cuenta">
+            <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+          </button>
+        </div>
+        <div class="user-menu" id="userMenu" style="display:none">
+          <button type="button" class="user-menu-item" id="switchAccountBtn">
+            <svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            Cambiar de cuenta
+          </button>
+          <button type="button" class="user-menu-item danger" id="logoutBtn">
+            <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Aquí se inyecta cada vista (main + sus modales) ── -->
+  <div id="viewRoot"></div>
+
+</div>
+
+<!-- Indicador chico de "cambiando de sección", NO pantalla en blanco -->
+<div id="viewLoading" style="display:none;position:fixed;top:14px;right:14px;z-index:9999;background:var(--ink);color:#fff;padding:6px 14px;border-radius:999px;font-size:11.5px;font-weight:600;box-shadow:var(--shadow)">
+  Cargando…
+</div>
+
+<script src="firebase.js" defer></script>
+<script src="auth-guard.js" defer></script>
+<script src="nav.js" defer></script>
+<script src="selection.js" defer></script>
+<script src="router.js" defer></script>
+
+<!-- Lógica de cada sección — se cargan UNA sola vez, sus conexiones
+     a Firebase quedan vivas para siempre mientras uses la app. -->
+<script src="stock.js" defer></script>
+<script src="import-stock.js" defer></script>
+<script src="pedidos-logic.js" defer></script>
+<script src="import-clientes.js" defer></script>
+<script src="historial-logic.js" defer></script>
+<script src="historial-actions.js" defer></script>
+<script src="nueva-nota-logic.js" defer></script>
+<script src="nueva-nota-actions.js" defer></script>
+<script src="registros-logic.js" defer></script>
+
+<script defer>
+  document.addEventListener('DOMContentLoaded', () => {
+    authReady.then(() => {
+      Router.start();
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iniciar sesión — Musical Fever</title>
+<link rel="stylesheet" href="variables.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@500&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; min-height: 20vh;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-ui);
+    padding: 10px;
+    position: relative;
+    overflow: hidden;
+    background: #070707;
+  }
+
+  /* ── Carrusel de fondo ── */
+  .bg-carousel { position: fixed; inset: 0; z-index: 0; }
+  .bg-slide {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+    opacity: 0;
+    transition: opacity 1.8s ease;
+  }
+  .bg-slide.active { opacity: 0.32; }
+  .bg-overlay {
+    position: fixed; inset: 0; z-index: 1;
+    background: linear-gradient(160deg, rgba(0, 0, 0, 0.13) 0%, rgba(4, 4, 4, 0) 55%, rgba(0, 0, 0, 0.092) 100%);
+  }
+
+  .login-shell {
+    position: relative; z-index: 2;
+    display: flex; width: 100%; max-width: 860px;
+    background: linear-gradient(160deg, var(--surface) 0%, var(--surface-2) 100%);
+    border-radius: var(--r-lg);
+    border: 1.5px solid rgba(255,255,255,0.85);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06);
+    overflow: hidden;
+  }
+
+  /* ── Panel izquierdo (solo desktop) ── */
+  .login-brand {
+    display: none;
+    flex: 0 0 320px;
+    background: #000;
+    flex-direction: column; align-items: center; justify-content: center;
+    padding: 48px 40px;
+  }
+  .login-brand img { width: 100%; max-width: 210px; height: auto; object-fit: contain; }
+  .login-brand .logo-row { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; width: 100%; }
+  .login-brand .logo-row img { width: auto; max-width: 30%; height: auto; object-fit: contain; }
+
+  /* ── Panel derecho (formulario) ── */
+  .login-form-panel {
+    flex: 1; padding: 44px 40px; min-width: 0;
+  }
+  .login-header { text-align: center; margin-bottom: 28px; }
+  .login-header img { width: 68px; height: 68px; border-radius: 14px; margin-bottom: 14px; }
+  .login-header .logo-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 14px; }
+  .login-header .logo-row img { width: 48px; height: 48px; border-radius: 10px; margin-bottom: 0; object-fit: contain; }
+  .login-header h1 { margin: 0 0 4px; font-size: 21px; font-weight: 800; color: var(--text-1); letter-spacing: -0.02em; }
+  .login-header p { margin: 0; font-size: 13px; color: var(--text-3); }
+
+  /* ── Selector de rol ── */
+  .role-select { display: flex; flex-direction: column; gap: 10px; }
+  .role-btn {
+    display: flex; align-items: center; gap: 12px;
+    width: 100%; padding: 14px 16px; border-radius: var(--r);
+    background: var(--surface-2); border: 1.5px solid var(--border);
+    cursor: pointer; font-family: var(--font-ui); text-align: left;
+    transition: border-color var(--t), background var(--t), transform 0.08s;
+    touch-action: manipulation;
+  }
+  .role-btn:hover { border-color: var(--ink); background: var(--surface); }
+  .role-btn:active { transform: scale(0.98); }
+  .role-icon {
+    width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+    background: var(--ink); display: flex; align-items: center; justify-content: center;
+  }
+  .role-icon svg { width: 19px; height: 19px; stroke: #fff; fill: none; stroke-width: 1.8; }
+  .role-icon { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 15px; color: #fff; }
+  .role-text-title { font-size: 14px; font-weight: 700; color: var(--text-1); }
+  .role-text-sub { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
+
+  /* ── Formulario de contraseña (tras elegir rol) ── */
+  .selected-role-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--r-sm); padding: 10px 14px; margin-bottom: 18px;
+    font-size: 13px; color: var(--text-2);
+  }
+  .selected-role-bar strong { color: var(--text-1); }
+  .btn-change-role {
+    background: none; border: none; color: var(--accent);
+    font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: var(--font-ui);
+    touch-action: manipulation;
+  }
+
+  .field-group { position: relative; margin-bottom: 14px; }
+  .field-group svg {
+    position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+    width: 16px; height: 16px; stroke: var(--text-3); fill: none; stroke-width: 1.8;
+    pointer-events: none;
+  }
+  .field-group input {
+    width: 100%; height: 46px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface-2);
+    padding: 0 44px; font-size: 13.5px; font-family: var(--font-ui);
+    color: var(--text-1); outline: none;
+    transition: border-color var(--t), box-shadow var(--t);
+  }
+  .field-group input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px var(--ink-soft); background: var(--surface); }
+  .field-group input::placeholder { color: var(--text-3); }
+  .toggle-pw {
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; padding: 4px;
+    display: flex; touch-action: manipulation;
+  }
+  .toggle-pw svg { position: static; width: 16px; height: 16px; stroke: var(--text-3); fill: none; stroke-width: 1.8; }
+
+  .login-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 4px 2px 20px; font-size: 12.5px;
+  }
+  .login-remember { display: flex; align-items: center; gap: 7px; color: var(--text-2); cursor: pointer; user-select: none; }
+  .login-remember input { width: 15px; height: 15px; accent-color: var(--ink); cursor: pointer; }
+  .login-forgot { color: var(--text-3); text-decoration: none; cursor: pointer; background: none; border: none; font-size: 12.5px; font-family: var(--font-ui); padding: 0; touch-action: manipulation; }
+  .login-forgot:hover { color: var(--ink); text-decoration: underline; }
+
+  .btn-login {
+    width: 100%; height: 46px; border-radius: 999px;
+    background: var(--ink); color: #fff; border: none;
+    font-size: 14px; font-weight: 700; font-family: var(--font-ui);
+    cursor: pointer; touch-action: manipulation;
+    transition: background var(--t), transform 0.08s;
+  }
+  .btn-login:hover { background: var(--ink-hover); }
+  .btn-login:active { transform: scale(0.98); }
+  .btn-login:disabled { opacity: 0.6; cursor: default; transform: none; }
+
+  .login-error {
+    display: none;
+    background: var(--red-bg); border: 1px solid #FECACA; color: var(--red);
+    font-size: 12.5px; border-radius: var(--r-sm); padding: 10px 14px;
+    margin-bottom: 16px; text-align: center;
+  }
+  .login-info {
+    display: none;
+    background: var(--green-bg); color: var(--green);
+    font-size: 12.5px; border-radius: var(--r-sm); padding: 10px 14px;
+    margin-bottom: 16px; text-align: center;
+  }
+
+  @media (min-width: 640px) {
+    body { background: #0a0a0a; }
+
+    .bg-slide.active { opacity: 0.55; }
+    .bg-overlay { background: rgba(0,0,0,0.55); }
+
+    .login-shell {
+      max-width: 1200px;
+      border: none;
+      border-radius: 20px;
+      box-shadow: 0 24px 70px rgba(0,0,0,0.35);
+      background: none;
+    }
+
+    /* ── Columna izquierda: marca ── */
+    .login-brand {
+      display: flex;
+      flex: 0 0 36%;
+      background: rgba(23,23,23,0.58);
+      backdrop-filter: blur(9px) saturate(115%);
+      -webkit-backdrop-filter: blur(9px) saturate(115%);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+    .login-brand img { max-width: 190px; }
+    .login-brand-tag {
+      display: block;
+      margin: 22px 0 0;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 300;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.6);
+      text-align: center;
+    }
+    .login-header img { display: none; }
+
+    /* ── Columna derecha: formulario ── */
+    .login-form-panel {
+      flex: 1;
+      background: #FAFAFA;
+      padding: 38px 44px;
+      display: flex;
+      flex-direction: column;
+    }
+    .login-header { text-align: left; margin-bottom: 20px; }
+    .login-header h1 {
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #2563EB;
+      margin: 0 0 14px;
+    }
+    .login-header p {
+      font-family: 'Inter', sans-serif;
+      font-size: 27px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #111827;
+      margin: 0;
+    }
+    .role-select { gap: 10px; margin-top: 22px; }
+    .role-btn {
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 14px;
+      min-height: 78px;
+      padding: 0 18px;
+      transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+    }
+    .role-btn:hover, .role-btn:focus-visible {
+      background: #fff;
+      border-color: #D1D5DB;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 24px rgba(17,24,39,0.08);
+    }
+    .role-btn:active { transform: translateY(-1px); }
+    .role-icon {
+      width: 54px; height: 54px;
+      background: #F4F4F5;
+      border-radius: 12px;
+    }
+    .role-icon svg { stroke: #1E3A8A; }
+    .role-text-title { font-size: 15px; font-weight: 600; color: #111827; }
+    .role-text-sub { display: block; font-size: 13px; color: #6B7280; margin-top: 3px; }
+    .role-chevron {
+      margin-left: auto;
+      display: flex; align-items: center;
+      color: #9CA3AF;
+      transition: color 200ms ease;
+    }
+    .role-chevron svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .role-btn:hover .role-chevron { color: #2563EB; }
+
+    .login-footer {
+      display: block;
+      margin-top: auto;
+      padding-top: 18px;
+      border-top: 1px solid #E5E7EB;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      color: #6B7280;
+    }
+    .login-footer .brand-link { color: #2563EB; text-decoration: none; }
+    .login-footer .brand-link:hover { color: #1D4ED8; text-decoration: underline; }
+  }
+
+  /* ═══ MÓVIL (< 640px) ═══ */
+  .mob-nav { display: none; }
+  .mob-nav-title { display: none; }
+  .mob-footer { display: none; }
+
+  @media (max-width: 639px) {
+    :root {
+      --fever-bg: #000000;
+      --fever-card: #1C1C1E;
+      --fever-hairline: rgba(255,255,255,0.08);
+      --fever-text: #FFFFFF;
+      --fever-muted: #A9A9AD;
+      --fever-footer: #6A6A6E;
+    }
+
+    html, body { height: 100%; }
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 0;
+      background: var(--fever-bg);
+    }
+    .bg-carousel, .bg-overlay { display: none !important; }
+    .login-brand { display: none !important; }
+    .login-brand-tag { display: none !important; }
+    .login-header img { display: none !important; }
+    .login-footer { display: none !important; }
+
+    /* ── Cabecera: logo centrado, fondo negro puro, sin decoración ── */
+    .mob-nav {
+      display: flex;
+      flex: 0 0 auto;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      position: relative;
+      background: transparent;
+      padding: 56px 24px 26px;
+      min-height: 32vh;
+      width: 100%;
+      overflow: hidden;
+    }
+    .mob-nav img {
+      position: relative;
+      height: 196px;
+      width: auto;
+      max-width: 72vw;
+      filter: drop-shadow(0 6px 18px rgba(0,0,0,0.55));
+    }
+    .mob-nav .logo-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .mob-nav .logo-row img {
+      position: relative;
+      height: 72px;
+      width: auto;
+      max-width: 28vw;
+      filter: drop-shadow(0 6px 18px rgba(0,0,0,0.55));
+    }
+    /* Fino hilo dorado bajo el logo, como la cuerda de un instrumento */
+    .mob-nav::after {
+      content: '';
+      position: relative;
+      display: block;
+      width: 46px;
+      height: 1px;
+      margin-top: 22px;
+      background: linear-gradient(90deg, rgba(216,178,126,0) 0%, rgba(216,178,126,0.65) 50%, rgba(216,178,126,0) 100%);
+    }
+
+    body.mob-pw-step .mob-nav {
+      min-height: 26vh;
+      padding: 38px 24px 22px;
+      justify-content: center;
+    }
+    body.mob-pw-step .mob-nav img { height: 146px; }
+    body.mob-pw-step .mob-nav .logo-row img { height: 56px; }
+    body.mob-pw-step .mob-nav::after { display: none; }
+
+    /* ── Tarjeta: mismo negro puro, sin costura ni sombra, crece hasta abajo ── */
+    .login-shell {
+      background: var(--fever-bg);
+      border: none;
+      box-shadow: none;
+      margin-top: 0;
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      width: 100%;
+      max-width: none;
+      padding: 0;
+      min-height: 0;
+      border-radius: 0;
+    }
+    .login-shell::before { content: none; }
+
+    .login-form-panel {
+      padding: 18px 24px 0;
+      max-width: 400px;
+      width: 100%;
+      margin: 0 auto;
+      box-sizing: border-box;
+    }
+
+    /* ── Título y subtítulo: sans confiada, sin adornos ── */
+    .login-header { text-align: center; margin-bottom: 26px; }
+    .login-header h1 {
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 21px;
+      color: var(--fever-text) !important;
+      letter-spacing: -0.015em;
+      margin: 0 0 5px;
+    }
+    .login-header p {
+      color: var(--fever-muted) !important;
+      font-family: 'Inter', sans-serif;
+      font-weight: 400;
+      font-size: 13.5px;
+      margin: 0;
+    }
+
+    /* ── Tarjetas de selección: gris oscuro plano, ícono + texto en blanco ── */
+    .role-select { display: flex; flex-direction: column; gap: 12px; }
+    .role-btn {
+      background: var(--fever-card) !important;
+      border: 1px solid var(--fever-hairline) !important;
+      border-left: 2px solid rgba(216,178,126,0.22) !important;
+      border-radius: 4px 16px 16px 4px !important;
+      color: var(--fever-text) !important;
+      position: relative;
+      padding: 16px 18px !important;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 18px rgba(0,0,0,0.22);
+      transition: background .15s ease, transform .15s ease, border-left-color .15s ease, box-shadow .15s ease;
+    }
+    .role-btn::after { content: none; }
+    .role-btn:hover, .role-btn:focus-visible {
+      background: #232326 !important;
+      border-left-color: rgba(216,178,126,0.65) !important;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset, 0 10px 22px rgba(0,0,0,0.3);
+      transform: translateY(-1px);
+    }
+    .role-btn:active { transform: scale(0.99); }
+    .role-btn .role-text-title {
+      color: var(--fever-text) !important;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.005em;
+    }
+    .role-btn .role-text-sub { display: none; }
+    .role-btn .role-icon {
+      background: linear-gradient(155deg, #8C4A3F 0%, #6E2C25 100%) !important;
+      color: #F4E6D2 !important;
+      border-radius: 50% !important;
+      font-family: 'DM Mono', monospace;
+      font-weight: 500 !important;
+      box-shadow: 0 0 0 1px rgba(216,178,126,0.3);
+    }
+    .role-chevron { display: none !important; }
+
+    /* ── Barra de rol elegido ── */
+    .selected-role-bar {
+      color: var(--fever-muted) !important;
+      background: var(--fever-card) !important;
+      border: 1px solid var(--fever-hairline) !important;
+      border-radius: 14px !important;
+    }
+    .selected-role-bar strong { color: var(--fever-text) !important; }
+    .btn-change-role { color: #fff !important; text-decoration: underline; }
+
+    /* ── Campo de contraseña ── */
+    .field-group {
+      background: var(--fever-card);
+      border: 1px solid var(--fever-hairline);
+      border-radius: 999px;
+      padding: 4px 8px;
+      display: flex;
+      align-items: center;
+    }
+    .field-group svg { stroke: var(--fever-muted) !important; }
+    .field-group input {
+      background: transparent !important;
+      color: var(--fever-text) !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    .field-group input::placeholder { color: var(--fever-muted) !important; }
+    .field-group:focus-within {
+      border-color: rgba(255,255,255,0.35);
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.06) !important;
+    }
+    .toggle-pw svg { stroke: var(--fever-muted) !important; }
+
+    .login-row { color: var(--fever-muted) !important; }
+    .login-remember { color: var(--fever-muted) !important; }
+    .login-forgot { color: #fff !important; }
+    .login-forgot:hover { color: var(--fever-muted) !important; }
+
+    /* ── Botón de ingreso: blanco sobre negro, máximo contraste ── */
+    .btn-login {
+      background: #fff !important;
+      color: #000 !important;
+      border: none !important;
+      border-radius: 999px !important;
+      font-weight: 700;
+    }
+    .btn-login:hover { background: #EDEDED !important; }
+
+    /* ── Pie de página ── */
+    .mob-footer {
+      display: block;
+      margin-top: auto;
+      text-align: center;
+      padding: 22px 24px 20px;
+    }
+    .mob-footer-copy {
+      color: var(--fever-footer);
+      font-size: 12px;
+      margin: 0 0 14px;
+    }
+    .mob-footer-bar {
+      width: 120px;
+      height: 2px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, rgba(216,178,126,0) 0%, rgba(216,178,126,0.9) 50%, rgba(216,178,126,0) 100%);
+      margin: 0 auto;
+    }
+
+    /* ══ Paso de contraseña: tarjeta clara que se desliza sobre el hero,
+       tal como la referencia — el rol se elige en negro, la contraseña
+       se ingresa en una tarjeta blanca. ══ */
+    body.mob-pw-step .login-shell {
+      background: #FFFFFF;
+      border-radius: 24px 24px 0 0;
+      box-shadow: 0 -16px 34px rgba(0,0,0,0.30);
+    }
+    body.mob-pw-step .login-shell::before {
+      content: '';
+      position: absolute;
+      top: 12px; left: 50%;
+      transform: translateX(-50%);
+      width: 36px; height: 3px;
+      border-radius: 3px;
+      background: rgba(20,20,20,0.15);
+    }
+    body.mob-pw-step .login-form-panel { padding-top: 30px; }
+    body.mob-pw-step .login-header h1 { color: #141414 !important; }
+    body.mob-pw-step .login-header p { color: #6B6B6E !important; }
+
+    body.mob-pw-step .selected-role-bar {
+      background: #F2F2F4 !important;
+      border-color: rgba(20,20,20,0.08) !important;
+      color: #6B6B6E !important;
+    }
+    body.mob-pw-step .selected-role-bar strong { color: #141414 !important; }
+    body.mob-pw-step .btn-change-role { color: #2E5AAC !important; }
+
+    body.mob-pw-step .field-group {
+      background: #F2F2F4;
+      border-color: rgba(20,20,20,0.10);
+    }
+    body.mob-pw-step .field-group svg,
+    body.mob-pw-step .toggle-pw svg { stroke: #8A8A8E !important; }
+    body.mob-pw-step .field-group input { color: #141414 !important; }
+    body.mob-pw-step .field-group input::placeholder { color: #8A8A8E !important; }
+    body.mob-pw-step .field-group:focus-within {
+      border-color: rgba(20,20,20,0.35);
+      box-shadow: 0 0 0 3px rgba(20,20,20,0.06) !important;
+    }
+
+    body.mob-pw-step .login-remember { color: #6B6B6E !important; }
+    body.mob-pw-step .login-forgot { color: #141414 !important; }
+    body.mob-pw-step .login-forgot:hover { color: #6B6B6E !important; }
+
+    body.mob-pw-step .btn-login {
+      background: #141414 !important;
+      color: #fff !important;
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    body.mob-pw-step .btn-login::after { content: '\2192'; font-size: 16px; }
+    body.mob-pw-step .btn-login:hover { background: #2A2A2A !important; }
+
+    body.mob-pw-step .mob-footer-copy { color: #9A9A9E; }
+    body.mob-pw-step .mob-footer-bar { display: none; }
+  }
+
+</style>
+</head>
+<body>
+<nav class="mob-nav">
+  <div class="logo-row">
+    <img src="logo-fever.png" alt="Musical Fever">
+  </div>
+</nav>
+
+<div class="bg-carousel" id="bgCarousel">
+  <div class="bg-slide active" style="background-image:url('bg-carrusel-1.jpg')"></div>
+  <div class="bg-slide" style="background-image:url('bg-carrusel-2.jpg')"></div>
+  <div class="bg-slide" style="background-image:url('bg-carrusel-3.jpg')"></div>
+</div>
+<div class="bg-overlay"></div>
+
+<div class="login-shell">
+
+  <div class="login-brand">
+    <div class="logo-row">
+      <img src="logo-fever.png" alt="Musical Fever">
+    </div>
+    <p class="login-brand-tag">Pasión por el sonido</p>
+  </div>
+
+  <div class="login-form-panel">
+    <div class="login-header">
+      <div class="logo-row">
+        <img src="logo-fever.png" alt="Musical Fever">
+      </div>
+      <h1>Bienvenido de nuevo</h1>
+      <p>Elige tu rol para continuar</p>
+    </div>
+
+    <div class="login-error" id="loginError"></div>
+    <div class="login-info" id="loginInfo"></div>
+
+    <!-- Paso 1: elegir rol -->
+    <div class="role-select" id="roleSelect">
+      <button type="button" class="role-btn" data-role="admin">
+        <span class="role-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
+        </span>
+        <span>
+          <div class="role-text-title">Admin</div>
+          <div class="role-text-sub">Acceso total al sistema</div>
+        </span>
+        <span class="role-chevron" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        </span>
+      </button>
+      <button type="button" class="role-btn" data-role="vendedor">
+        <span class="role-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M6 2l1.5 5h9L18 2"/><path d="M3 7h18l-1.5 13a2 2 0 0 1-2 2H6.5a2 2 0 0 1-2-2L3 7z"/></svg>
+        </span>
+        <span>
+          <div class="role-text-title">Vendedor</div>
+          <div class="role-text-sub">Ver stock, filtrar y hacer notas</div>
+        </span>
+        <span class="role-chevron" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        </span>
+      </button>
+    </div>
+
+    <!-- Paso 2: usuario/correo + contraseña (aparece tras elegir rol) -->
+    <form id="loginForm" style="display:none">
+      <div class="selected-role-bar">
+        <span>Ingresando como <strong id="selectedRoleLabel"></strong></span>
+        <button type="button" class="btn-change-role" id="backToRoles">Cambiar</button>
+      </div>
+
+      <div class="field-group">
+        <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 6 10-6"/></svg>
+        <input type="text" id="loginIdentifier" placeholder="Correo" autocomplete="username" required>
+      </div>
+
+      <div class="field-group">
+        <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <input type="password" id="loginPassword" placeholder="Contraseña" autocomplete="current-password" required>
+        <button type="button" class="toggle-pw" id="togglePw" title="Mostrar/ocultar contraseña">
+          <svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+
+      <div class="login-row">
+        <label class="login-remember">
+          <input type="checkbox" id="loginRemember" checked>
+          Recordarme
+        </label>
+        <button type="button" class="login-forgot" id="forgotBtn">¿Olvidaste tu contraseña?</button>
+      </div>
+
+      <button type="submit" class="btn-login" id="loginSubmit">Ingresar</button>
+    </form>
+
+    <div class="login-footer">© 2025 <a href="#" class="brand-link">Musical Fever Instruments.</a> Todos los derechos reservados.</div>
+  </div>
+
+  <div class="mob-footer">
+    <p class="mob-footer-copy">© Fever Instruments</p>
+    <div class="mob-footer-bar"></div>
+  </div>
+
+</div>
+
+<script src="firebase.js"></script>
+<script>
+  // Carrusel de fondo: cambia de foto cada 6 segundos con un
+  // cruce suave de opacidad (crossfade).
+  (function() {
+    const slides = document.querySelectorAll('#bgCarousel .bg-slide');
+    let current = 0;
+    setInterval(() => {
+      slides[current].classList.remove('active');
+      current = (current + 1) % slides.length;
+      slides[current].classList.add('active');
+    }, 6000);
+  })();
+</script>
+<script>
+  // Admin: cuenta fija con correo real (coincide con lo que exigen
+  // las reglas de Firebase). Vendedor: cuenta identificada por un
+  // "usuario" corto, no un correo — por dentro se traduce a
+  // usuario@fever.local (ver usernameToAuthEmail en firebase.js,
+  // ya cargado en esta página) porque Firebase Auth necesita algo
+  // con forma de correo, pero el vendedor nunca ve ni escribe eso.
+
+  const roleSelect        = document.getElementById('roleSelect');
+  const form               = document.getElementById('loginForm');
+  const identifierEl       = document.getElementById('loginIdentifier');
+  const pwEl               = document.getElementById('loginPassword');
+  const rememberEl         = document.getElementById('loginRemember');
+  const errorEl            = document.getElementById('loginError');
+  const infoEl              = document.getElementById('loginInfo');
+  const submitBtn           = document.getElementById('loginSubmit');
+  const selectedRoleLabel   = document.getElementById('selectedRoleLabel');
+  const forgotBtnEl         = document.getElementById('forgotBtn');
+
+  let selectedRole = null;
+
+  // Si volvimos aquí porque auth-guard.js cerró la sesión (cuenta
+  // deshabilitada, sin perfil configurado, o no se pudo confirmar
+  // la sesión), se lo explicamos en vez de dejar un login mudo.
+  (function mostrarMotivoRedireccion() {
+    const motivo = new URLSearchParams(window.location.search).get('motivo');
+    const mensajes = {
+      'deshabilitada':   'Tu cuenta fue deshabilitada. Contacta al administrador.',
+      'sin-perfil':      'Tu cuenta no tiene un perfil configurado todavía. Contacta al administrador.',
+      'error-conexion':  'No se pudo confirmar tu sesión por un problema de conexión. Intenta de nuevo.',
+    };
+    if (motivo && mensajes[motivo]) {
+      errorEl.textContent = mensajes[motivo];
+      errorEl.style.display = 'block';
+    }
+  })();
+
+  // ── Bloqueo por intentos fallidos (protección ante fuerza bruta) ──
+  // Se lleva por separado para cada identificador (correo de admin,
+  // o usuario de vendedor) — 10 intentos fallidos seguidos bloquean
+  // el formulario 15 minutos. Esto es nuestro, vive en este
+  // navegador; aparte, Firebase tiene su propia protección en el
+  // servidor (auth/too-many-requests).
+  const MAX_INTENTOS = 10;
+  const BLOQUEO_MS   = 15 * 60 * 1000; // 15 minutos
+
+  const attemptsKey = id => 'loginAttempts_' + id;
+  const lockKey      = id => 'loginLockUntil_' + id;
+
+  function getAttempts(id) { return parseInt(localStorage.getItem(attemptsKey(id)) || '0', 10); }
+  function setAttempts(id, n) { localStorage.setItem(attemptsKey(id), String(n)); }
+  function getLockUntil(id) { return parseInt(localStorage.getItem(lockKey(id)) || '0', 10); }
+  function setLockUntil(id, ts) { localStorage.setItem(lockKey(id), String(ts)); }
+  function clearIntentos(id) {
+    localStorage.removeItem(attemptsKey(id));
+    localStorage.removeItem(lockKey(id));
+  }
+  function formatMMSS(ms) {
+    const totalSec = Math.max(0, Math.ceil(ms / 1000));
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return m + ':' + String(s).padStart(2, '0');
+  }
+
+  let lockInterval = null;
+
+  function currentIdentifierKey() {
+    // Clave estable para el contador de intentos, independiente de
+    // mayúsculas/espacios — igual para "Ana " y "ana".
+    const raw = identifierEl.value.trim().toLowerCase();
+    return selectedRole + ':' + raw;
+  }
+
+  function checkBloqueo() {
+    if (lockInterval) { clearInterval(lockInterval); lockInterval = null; }
+    const id = currentIdentifierKey();
+    if (!id) return false;
+
+    const restante = getLockUntil(id) - Date.now();
+    if (restante <= 0) {
+      pwEl.disabled = false;
+      submitBtn.disabled = false;
+      forgotBtnEl.disabled = false;
+      return false;
+    }
+
+    pwEl.disabled = true;
+    submitBtn.disabled = true;
+    forgotBtnEl.disabled = true;
+    infoEl.style.display = 'none';
+
+    const actualizar = () => {
+      const ms = getLockUntil(id) - Date.now();
+      if (ms <= 0) {
+        clearInterval(lockInterval);
+        lockInterval = null;
+        clearIntentos(id);
+        pwEl.disabled = false;
+        submitBtn.disabled = false;
+        forgotBtnEl.disabled = false;
+        errorEl.style.display = 'none';
+        return;
+      }
+      errorEl.textContent = 'Demasiados intentos fallidos. Por seguridad, vuelve a intentar en ' + formatMMSS(ms) + '.';
+      errorEl.style.display = 'block';
+    };
+    actualizar();
+    lockInterval = setInterval(actualizar, 1000);
+    return true;
+  }
+
+  // ── Paso 1: elegir rol → cambia las etiquetas del paso 2 ──
+  document.querySelectorAll('.role-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedRole = btn.dataset.role;
+      selectedRoleLabel.textContent = selectedRole === 'admin' ? 'Admin' : 'Vendedor';
+      identifierEl.type = selectedRole === 'admin' ? 'email' : 'text';
+      identifierEl.placeholder = selectedRole === 'admin' ? 'Correo' : 'Usuario';
+      identifierEl.autocomplete = selectedRole === 'admin' ? 'username' : 'username';
+      // El vendedor no tiene una bandeja de correo real detrás de su
+      // cuenta (usuario@fever.local no existe de verdad), así que
+      // "olvidé mi contraseña" no puede mandarle nada — se lo
+      // decimos en vez de mostrar un botón que no funcionaría.
+      forgotBtnEl.style.display = selectedRole === 'admin' ? '' : 'none';
+      roleSelect.style.display = 'none';
+      form.style.display = '';
+      errorEl.style.display = 'none';
+      infoEl.style.display = 'none';
+      identifierEl.value = '';
+      pwEl.value = '';
+      document.body.classList.add('mob-pw-step');
+      if (!checkBloqueo()) identifierEl.focus();
+    });
+  });
+
+  document.getElementById('backToRoles').addEventListener('click', () => {
+    if (lockInterval) { clearInterval(lockInterval); lockInterval = null; }
+    selectedRole = null;
+    form.style.display = 'none';
+    roleSelect.style.display = '';
+    errorEl.style.display = 'none';
+    infoEl.style.display = 'none';
+    document.body.classList.remove('mob-pw-step');
+  });
+
+  identifierEl.addEventListener('blur', () => checkBloqueo());
+
+  document.getElementById('togglePw').addEventListener('click', () => {
+    pwEl.type = pwEl.type === 'password' ? 'text' : 'password';
+  });
+
+  // Si ya hay sesión activa, no mostrar el login — ir directo a la app.
+  // (auth-guard.js, en index.html y las demás páginas, es quien de
+  // verdad decide si esa sesión es válida — aquí solo evitamos
+  // mostrar el formulario si claramente ya hay alguien conectado.)
+  firebase.auth().onAuthStateChanged(user => {
+    if (user) window.location.href = 'index.html';
+  });
+
+  // Convierte lo que escribió la persona en el correo real que
+  // Firebase Auth necesita: tal cual si eligió Admin, o
+  // usuario@fever.local (via usernameToAuthEmail, de firebase.js)
+  // si eligió Vendedor.
+  function resolveAuthEmail() {
+    const raw = identifierEl.value.trim();
+    if (selectedRole === 'admin') return raw.toLowerCase();
+    return usernameToAuthEmail(raw);
+  }
+
+  // Códigos de Firebase que cuentan como "contraseña incorrecta" para
+  // efectos del contador de intentos. Errores de red o de formato de
+  // correo no deben gastar intentos del usuario.
+  const CODIGOS_CONTRASEÑA_INCORRECTA = ['auth/wrong-password', 'auth/invalid-credential', 'auth/user-not-found'];
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    errorEl.style.display = 'none';
+    infoEl.style.display  = 'none';
+
+    if (checkBloqueo()) return; // bloqueado: ni se intenta
+    const idKey = currentIdentifierKey();
+    const authEmail = resolveAuthEmail();
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Ingresando…';
+
+    try {
+      const persistence = rememberEl.checked
+        ? firebase.auth.Auth.Persistence.LOCAL
+        : firebase.auth.Auth.Persistence.SESSION;
+      await firebase.auth().setPersistence(persistence);
+      await firebase.auth().signInWithEmailAndPassword(authEmail, pwEl.value);
+      clearIntentos(idKey); // login correcto: se resetea el contador de esa cuenta
+      window.location.href = 'index.html';
+    } catch (err) {
+      if (CODIGOS_CONTRASEÑA_INCORRECTA.includes(err.code)) {
+        const intentos = getAttempts(idKey) + 1;
+        if (intentos >= MAX_INTENTOS) {
+          setAttempts(idKey, 0);
+          setLockUntil(idKey, Date.now() + BLOQUEO_MS);
+          submitBtn.textContent = 'Ingresar';
+          checkBloqueo(); // pinta el mensaje y bloquea el formulario
+          return;
+        }
+        setAttempts(idKey, intentos);
+      }
+      errorEl.textContent = traducirErrorAuth(err.code, selectedRole);
+      errorEl.style.display = 'block';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Ingresar';
+    }
+  });
+
+  // Solo aplica al admin (el botón está oculto para vendedor — ver
+  // arriba). El correo del admin sí es una bandeja real.
+  document.getElementById('forgotBtn').addEventListener('click', async () => {
+    const email = identifierEl.value.trim().toLowerCase();
+    if (!email) {
+      errorEl.textContent = 'Escribe primero tu correo arriba.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    try {
+      await firebase.auth().sendPasswordResetEmail(email);
+      errorEl.style.display = 'none';
+      infoEl.textContent = 'Te enviamos un correo para restablecer la contraseña.';
+      infoEl.style.display = 'block';
+    } catch (err) {
+      errorEl.textContent = traducirErrorAuth(err.code, selectedRole);
+      errorEl.style.display = 'block';
+    }
+  });
+
+  function traducirErrorAuth(code, role) {
+    if (code === 'auth/user-not-found' && role === 'vendedor') {
+      return 'Ese usuario no existe. Revisa cómo lo escribió el administrador al crear tu cuenta.';
+    }
+    const map = {
+      'auth/invalid-email':        'El correo no tiene un formato válido.',
+      'auth/user-not-found':       'No existe esa cuenta.',
+      'auth/wrong-password':       'Contraseña incorrecta.',
+      'auth/invalid-credential':   'Correo o contraseña incorrectos. Revisa ambos.',
+      'auth/too-many-requests':    'Demasiados intentos. Espera un momento y vuelve a intentar.',
+      'auth/network-request-failed': 'Sin conexión a internet. Revisa tu señal.'
+    };
+    return map[code] || 'No se pudo iniciar sesión. Intenta de nuevo.';
+  }
+</script>
+</body>
+</html>
