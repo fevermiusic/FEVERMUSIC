@@ -521,7 +521,7 @@ async function captureNotaAsPdf() {
   drawRightTextOn(page, `S/ ${fmt(o.total)}`, margin + contentW, ty, 12.5, fontBold, cBlue);
 
   // ── Footer (en todas las páginas generadas) ──
-  const footerStr = 'Musical Fever - Sistema interno de pedidos';
+  const footerStr = 'Con Fever sientes y vives la música';
   const footerW   = font.widthOfTextAtSize(footerStr, 8);
   pdfDoc.getPages().forEach(pg => {
     pg.drawText(footerStr, { x: (pageWidth - footerW) / 2, y: margin / 2, size: 8, font, color: cGrayLt });
@@ -758,7 +758,7 @@ async function exportPDF() {
     page.drawText('Total general', { x: margin + contentW - 220, y, size: 11, font: fontBold, color: cInk });
     drawRightTextOn(page, `S/ ${fmt(grandTotal)}`, margin + contentW, y, 12.5, fontBold, cBlue);
 
-    const footerStr = 'Musical Fever - Sistema interno de pedidos';
+    const footerStr = 'Con Fever sientes y vives la música';
     const footerW   = font.widthOfTextAtSize(footerStr, 8);
     pdfDoc.getPages().forEach(pg => {
       pg.drawText(footerStr, { x: (pageWidth - footerW) / 2, y: margin / 2, size: 8, font, color: cGrayLt });
